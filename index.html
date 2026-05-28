@@ -115,7 +115,7 @@
       const hash = await sha256(pw.value);
       if (hash === HASH) {
         sessionStorage.setItem('li_auth', '1');
-        window.location.href = 'app.html';
+        window.location.href = 'app.html?v=4';
       } else {
         err.textContent = 'Incorrect password. Try again.';
         pw.classList.add('error');
