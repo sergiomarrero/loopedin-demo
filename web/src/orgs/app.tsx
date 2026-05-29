@@ -1037,7 +1037,8 @@ function ComposeScreen({ plan, balance, onSubmit, onCharge, onUpgrade, toast, re
           )}
         </Card>
 
-        {/* Live audience */}
+        {/* Live audience — only shown once the estimated reach clears 1,000. */}
+        {audience > 1000 && (
         <Card style={{ marginBottom: 18, borderColor: 'var(--brand-orange-border)', background: 'var(--brand-orange-tint)' }}>
           <div className="row" style={{ alignItems: 'center', gap: 18 }}>
             <div style={{ flex: 1 }}>
@@ -1052,6 +1053,7 @@ function ComposeScreen({ plan, balance, onSubmit, onCharge, onUpgrade, toast, re
             </div>
           </div>
         </Card>
+        )}
 
         {/* Launch / charge-up */}
         <div className="launch-bar">
