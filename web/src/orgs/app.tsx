@@ -3,6 +3,7 @@
 // Ported faithfully from the LoopedIn prototype bundle (single-module port).
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { orgApi, adminApi, getToken, setToken, DEMO_ORG_EMAIL } from '../api';
 
 
 // ===== source: b96dd088 =====
@@ -1265,6 +1266,15 @@ function ResponsesScreen({ plan, questions, qid, navigate, onUpgrade }) {
   const isPro = plan === 'pro';
   const q = questions.find(x => x.id === qid) || questions.find(x => x.collected > 0) || questions[0];
   const [view, setView] = useState('summary');
+  const [responses, setResponses] = useState(null);
+
+  // Pull the anonymized responses for this question from the backend.
+  React.useEffect(() => {
+    if (!q) return;
+    let live = true;
+    orgApi.responses(q.id).then((r) => { if (live) setResponses(r.responses); }).catch(() => {});
+    return () => { live = false; };
+  }, [q && q.id]);
 
   return (
     <div className="page">
@@ -1307,7 +1317,7 @@ function ResponsesScreen({ plan, questions, qid, navigate, onUpgrade }) {
         ) : view === 'summary' ? (
           <SummaryView q={q} />
         ) : (
-          <IndividualView q={q} />
+          <IndividualView q={q} responses={responses} />
         )}
       </div>
     </div>
@@ -1363,19 +1373,21 @@ function SummaryView({ q }) {
   );
 }
 
-function IndividualView({ q }) {
+function IndividualView({ q, responses }) {
   const { useState } = React;
   const [flagged, setFlagged] = useState({});
+  // Real responses from the backend when available; otherwise the sample set.
+  const list = responses && responses.length ? responses : SAMPLE_RESPONSES;
   return (
     <div className="col" style={{ gap: 14 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <span className="muted" style={{ fontSize: 13 }}>Showing {SAMPLE_RESPONSES.length} of {q.collected.toLocaleString()} · newest first · <strong style={{ color: 'var(--ink)' }}>no names</strong></span>
+        <span className="muted" style={{ fontSize: 13 }}>Showing {list.length} of {q.collected.toLocaleString()} · newest first · <strong style={{ color: 'var(--ink)' }}>no names</strong></span>
         <div className="row" style={{ gap: 8 }}>
           <span className="chip">All</span>
           <span className="chip">Flagged</span>
         </div>
       </div>
-      {SAMPLE_RESPONSES.map(r => {
+      {list.map(r => {
         const isFlag = flagged[r.id] ?? r.flagged;
         return (
           <Card key={r.id} hover style={{ padding: 20 }}>
@@ -1605,7 +1617,7 @@ const ADMIN_SEED = [
   },
 ];
 
-function AdminScreen({ submitted }) {
+function AdminScreen({ submitted, onReview }) {
   const { useState } = React;
   const queue = [...submitted, ...ADMIN_SEED];
   const [decisions, setDecisions] = useState({});
@@ -1696,7 +1708,7 @@ function AdminScreen({ submitted }) {
                   </div>
                 ) : (
                   <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-                    <Btn kind="dark" sm onClick={() => setDecisions(s => ({ ...s, [q.id]: 'approved' }))}>Approve & publish</Btn>
+                    <Btn kind="dark" sm onClick={() => { setDecisions(s => ({ ...s, [q.id]: 'approved' })); onReview && onReview(q.id, 'approve'); }}>Approve & publish</Btn>
                     <Btn kind="outline" sm onClick={() => setReviewing(q)}>Send back…</Btn>
                     <span style={{ flex: 1 }} />
                     <button className="btn btn-ghost btn-sm" onClick={() => setReviewing(q)}>View detail</button>
@@ -1714,7 +1726,7 @@ function AdminScreen({ submitted }) {
           onClose={() => setReviewing(null)}
           footer={[
             <Btn key="c" kind="outline" onClick={() => setReviewing(null)} style={{ flex: 1 }}>Cancel</Btn>,
-            <Btn key="s" kind="primary" onClick={() => { setDecisions(s => ({ ...s, [reviewing.id]: 'returned' })); setReviewing(null); }} style={{ flex: 1.4 }}>Return with note</Btn>,
+            <Btn key="s" kind="primary" onClick={() => { setDecisions(s => ({ ...s, [reviewing.id]: 'returned' })); onReview && onReview(reviewing.id, 'reject'); setReviewing(null); }} style={{ flex: 1.4 }}>Return with note</Btn>,
           ]}>
           <div className="muted" style={{ fontSize: 14, lineHeight: 1.5, marginBottom: 14 }}>"{reviewing.text}"</div>
           <Field label="Reason (sent to the buyer)">
@@ -1767,11 +1779,45 @@ function App() {
   const [toastMsg, setToastMsg] = useS(null);
   const [charge, setCharge] = useS(null); // {need} | {} → open charge sheet
 
-  // Persist the lightweight account state (not the seed data).
+  // Persist the lightweight UI state (route/role/tweaks) locally for quick reloads.
   useE(() => {
     const { role, screen, qid, plan, balance, autocharge } = st;
     localStorage.setItem(STORE, JSON.stringify({ role, screen, qid, plan, balance, autocharge }));
   }, [st]);
+
+  // Authenticate as the demo org and hydrate balance / plan / campaigns from the API.
+  useE(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!getToken('org')) {
+          const { token } = await orgApi.register(DEMO_ORG_EMAIL, 'Your organization');
+          setToken('org', token);
+        }
+        const me = await orgApi.me();
+        const qs = await orgApi.questions();
+        if (cancelled) return;
+        setSt(s => ({ ...s, plan: me.plan, balance: me.balance, autocharge: me.autocharge }));
+        if (qs && qs.length) setQuestions(qs);
+      } catch (e) {
+        /* offline — keep seed data */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load the live review queue whenever the admin console is open.
+  useE(() => {
+    if (st.role !== 'admin') return;
+    adminApi.queue().then(setSubmitted).catch(() => {});
+  }, [st.role]);
+
+  const onAdminReview = (id, action) => {
+    adminApi
+      .review(id, action)
+      .then(() => adminApi.queue().then(setSubmitted).catch(() => {}))
+      .catch(() => {});
+  };
 
   // Apply the expressive tweaks. Theme reskins every surface; density resets the
   // spatial rhythm; voice swaps copy personality (threaded into screens below).
@@ -1826,21 +1872,25 @@ function App() {
   const chargeUp = (ptsAmt) => {
     set({ balance: st.balance + ptsAmt });
     toast(`Charged up ${ptsAmt.toLocaleString()} pts.`);
+    orgApi.charge(ptsAmt).then((o) => set({ balance: o.balance })).catch(() => {});
   };
 
   const submitQuestion = (draft) => {
     const q = {
       id: 'q' + Date.now(), ...draft, collected: 0, status: 'pending',
     };
+    // Optimistic: show it immediately, then persist and reconcile from the server.
     setQuestions(qs => [q, ...qs]);
-    setSubmitted(s => [{
-      id: q.id, org: 'Your organization', plan: st.plan,
-      text: q.text, mode: q.mode, points: q.points, target: q.target,
-      city: q.city, income: q.income, start: q.start, end: q.end,
-      submitted: 'just now', cost: q.points * q.target,
-    }, ...s]);
     if (q.points > 0) set({ balance: st.balance - q.points * q.target, screen: 'dashboard' });
     else set({ screen: 'dashboard' });
+    orgApi
+      .compose(draft)
+      .then(async () => {
+        const [me, qs] = await Promise.all([orgApi.me(), orgApi.questions()]);
+        setSt(s => ({ ...s, balance: me.balance }));
+        if (qs && qs.length) setQuestions(qs);
+      })
+      .catch(() => {});
   };
 
   const openResponses = (qid) => set({ screen: 'responses', qid });
@@ -1855,7 +1905,7 @@ function App() {
 
   let body;
   if (st.role === 'admin') {
-    body = <AdminScreen submitted={submittedToAdmin} />;
+    body = <AdminScreen submitted={submittedToAdmin} onReview={onAdminReview} />;
   } else if (st.screen === 'compose') {
     body = <ComposeScreen plan={st.plan} balance={st.balance}
       onSubmit={submitQuestion} onCharge={(need) => setCharge({ need })} onUpgrade={onUpgrade} toast={toast}
@@ -1876,9 +1926,12 @@ function App() {
           set({ plan: p });
           toast(p === 'pro' ? 'Welcome to Pro.' : 'Switched to Free.');
         }
+        orgApi.setPlan(p).then((r) => set({ balance: r.org.balance })).catch(() => {});
       }}
       onCharge={chargeUp}
-      autocharge={st.autocharge} onSetAutocharge={(a) => set({ autocharge: a })} voice={V} />;
+      autocharge={st.autocharge}
+      onSetAutocharge={(a) => { set({ autocharge: a }); orgApi.setAutocharge(a).catch(() => {}); }}
+      voice={V} />;
   }
 
   return (

@@ -3,6 +3,7 @@
 // Ported faithfully from the LoopedIn prototype bundle (single-module port).
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { memberApi, getToken, setToken } from '../api';
 
 
 // ===== source: 3781690f =====
@@ -1338,6 +1339,7 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
       qid: q.id,
       cents: q.cents,
       mode,
+      text: mode === 'text' ? text.trim() : null,
       addTag: qualAnswer === 'yes' ? q.qualifier?.tag : null,
     });
   };
@@ -3045,7 +3047,12 @@ function PulseApp() {
     }
   }
 
-  function onAnswered({ qid, cents, mode, addTag, qualifies, tag }) {
+  function onAnswered({ qid, cents, mode, text, addTag, qualifies, tag }) {
+    // Persist the answer if the member has claimed (has a token). Pre-claim
+    // answers are held client-side and replayed to the server on claim.
+    if (getToken('member')) {
+      memberApi.answer(qid, text ?? null, mode).catch(() => {});
+    }
     const usedTag = addTag || tag;
     const newAnswered = { ...state.answered, [qid]: true };
     const newQualified = usedTag && qualifies
@@ -3078,14 +3085,31 @@ function PulseApp() {
     }, 1300);
   }
 
-  function onClaim({ email, phone }) {
-    setState(s => ({
-      ...s,
-      email, phone,
-      claimed: true,
-      pendingCents: 0,
-      screen: 'wallet',
-    }));
+  async function onClaim({ email, phone }) {
+    // Optimistically move to the wallet, then register with the backend and
+    // replay any answers earned before claiming.
+    setState(s => ({ ...s, email, phone, claimed: true, pendingCents: 0, screen: 'wallet' }));
+    try {
+      const { token } = await memberApi.register(email, phone);
+      setToken('member', token);
+      // Replay locally-recorded answers (server dedupes / ignores conflicts).
+      const earned = [...(state.history || [])].reverse();
+      for (const h of earned) {
+        await memberApi.answer(h.qid, h.text ?? null, h.mode).catch(() => {});
+      }
+      if (state.profile) {
+        await memberApi.saveProfile(state.profile, state.qualifiedFor, state.streak).catch(() => {});
+      }
+      const me = await memberApi.me();
+      setState(s => ({
+        ...s,
+        cents: me.cents,
+        pendingCents: 0,
+        answered: { ...s.answered, ...me.answered },
+      }));
+    } catch (e) {
+      /* offline — keep local state */
+    }
   }
   function onSkipClaim() {
     setState(s => ({ ...s, screen: 'feed' }));
@@ -3101,8 +3125,45 @@ function PulseApp() {
 
   function resetAll() {
     localStorage.removeItem(STORAGE_KEY);
+    setToken('member', null);
     setState({ ...INITIAL_STATE });
   }
+
+  // On load: if the member has claimed before, hydrate wallet + answers from the
+  // backend, and pull the live question catalog (so approved org questions show).
+  React.useEffect(() => {
+    if (!getToken('member')) return;
+    (async () => {
+      try {
+        const me = await memberApi.me();
+        setState(s => ({
+          ...s,
+          email: me.email,
+          phone: me.phone,
+          claimed: true,
+          cents: me.cents,
+          pendingCents: me.pendingCents,
+          streak: me.streak ?? s.streak,
+          profile: { ...s.profile, ...(me.profile || {}) },
+          qualifiedFor: { ...s.qualifiedFor, ...(me.qualifiedFor || {}) },
+          answered: { ...s.answered, ...me.answered },
+          history: me.history && me.history.length ? me.history : s.history,
+          hasAnsweredOnce: s.hasAnsweredOnce || me.hasAnsweredOnce,
+        }));
+        const qs = await memberApi.questions();
+        let added = false;
+        for (const q of qs) {
+          if (!PULSE_QUESTIONS.some(p => p.id === q.id)) {
+            PULSE_QUESTIONS.push(q);
+            added = true;
+          }
+        }
+        if (added) setState(s => ({ ...s })); // bump to re-render the feed
+      } catch (e) {
+        setToken('member', null); // stale/expired token
+      }
+    })();
+  }, []);
 
   // Decide whether to show the bottom tab bar
   const showTabBar = ['feed', 'wallet', 'profile', 'streaks'].includes(state.screen);
