@@ -1745,7 +1745,7 @@ function ClaimScreen({ state, onClaim, onSkip }) {
         </div>
 
         <div style={{ marginTop: 22 }}>
-          <PButton onClick={onClaim} disabled={!canSave}>
+          <PButton onClick={() => onClaim({ email, phone })} disabled={!canSave}>
             {canSave ? `Save my ${state.cents} points` : 'Save my wallet'}
           </PButton>
         </div>
@@ -3186,7 +3186,12 @@ function PulseApp() {
       />;
       break;
     case 'answer':
-      body = <AnswerScreen state={state} navigate={navigate} qid={state.qid} onAnswered={onAnswered} />;
+      body = <AnswerScreen
+        state={state}
+        qid={state.qid}
+        back={() => navigate(state.hasAnsweredOnce ? 'feed' : 'onboarding')}
+        onSubmit={onAnswered}
+      />;
       break;
     case 'claim':
       body = <ClaimScreen state={state} navigate={navigate} onClaim={onClaim} onSkip={onSkipClaim} />;
