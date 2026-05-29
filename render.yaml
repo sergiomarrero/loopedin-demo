@@ -1,0 +1,35 @@
+# Render Blueprint — deploys LoopedIn as a single web service that serves both
+# the API and the built frontend from one origin (so the app's /api calls work
+# with no proxy/CORS).
+#
+# To launch:
+#   1. Push this repo to GitHub (done).
+#   2. In Render: New + → Blueprint → pick this repo → Apply.
+#   3. Open the service URL. The landing page is at /, the member app at
+#      /member.html, the orgs console at /orgs.html.
+#
+# Free tier note: the filesystem is ephemeral, so the SQLite DB resets to the
+# seed data on each deploy/restart. To persist data, switch to a paid instance
+# and uncomment the `disk` block below (and point DATABASE_URL at it).
+
+services:
+  - type: web
+    name: loopedin
+    runtime: node
+    plan: free
+    buildCommand: npm run deploy:build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:./prod.db
+      - key: JWT_SECRET
+        generateValue: true
+    # To persist the SQLite database across deploys/restarts (paid plans only):
+    # disk:
+    #   name: loopedin-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # and set DATABASE_URL to file:/var/data/prod.db

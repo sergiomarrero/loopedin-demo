@@ -108,6 +108,46 @@ GET  /api/admin/queue            questions awaiting review
 POST /api/admin/questions/:id/review   { action: approve | reject }
 ```
 
+## Deploy
+
+The app deploys as a **single web service**: in production the API also serves
+the built frontend from the same origin, so the app's relative `/api` calls work
+with no proxy or CORS setup.
+
+### One-click (Render)
+
+A [`render.yaml`](./render.yaml) blueprint is included.
+
+1. In [Render](https://render.com): **New + → Blueprint**, pick this repo, **Apply**.
+2. Open the service URL — landing at `/`, member app at `/member.html`, orgs at
+   `/orgs.html`.
+
+Render builds with `npm run deploy:build` (install → build web → push schema →
+seed) and starts with `npm run start`. `JWT_SECRET` is generated automatically;
+`PORT` is provided by Render.
+
+> **Free-tier note:** the filesystem is ephemeral, so the SQLite database resets
+> to the seed data on each deploy/restart. To persist data, move to a paid
+> instance and uncomment the `disk` block in `render.yaml` (then point
+> `DATABASE_URL` at the mounted path). For higher scale, switch the Prisma
+> datasource to PostgreSQL.
+
+### Run the production build locally
+
+```bash
+npm run build          # build the frontend into web/dist
+npm run db:push        # create the database
+npm run seed           # seed it
+NODE_ENV=production npm run start   # serves API + frontend on :4000
+```
+
+### Other hosts
+
+Any Node host works: build the frontend, then run the server with `NODE_ENV=production`.
+Set `DATABASE_URL`, `JWT_SECRET`, and `PORT`. (You can also split frontend/backend
+across, e.g., Vercel + Render — then set the web app's API base instead of relying
+on same-origin `/api`.)
+
 ## Notes
 
 - Points are stored internally as cents (1 cent = 1 point); cash conversion is
