@@ -2,5 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "outputDirectory": "web/dist"
+  "outputDirectory": "web/dist",
+  "rewrites": [
+    { "source": "/member", "destination": "/member.html" },
+    { "source": "/researcher", "destination": "/orgs.html" }
+  ],
+  "redirects": [
+    { "source": "/member.html", "destination": "/member", "permanent": true },
+    { "source": "/orgs.html", "destination": "/researcher", "permanent": true },
+    { "source": "/orgs", "destination": "/researcher", "permanent": true }
+  ]
 }
