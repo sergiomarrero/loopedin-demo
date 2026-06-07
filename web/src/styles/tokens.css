@@ -1,0 +1,226 @@
+/*
+   Rebel One — Foundation tokens
+   Source: github.com/sergiomarrero/rbl1-site (styles.css, DESIGN_SYSTEM.md)
+   ═══════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("/inter.woff2") format('woff2');
+}
+
+:root {
+  /* ── Brand ─────────────────────────────────────────────────── */
+  --brand-orange:        #e8530e;  /* primary accent — CTAs, links, stat numbers */
+  --brand-orange-hover:  #d14a0b;  /* button hover */
+  --brand-orange-tint:   #fff1e8;  /* eyebrow pill background */
+  --brand-orange-border: #f7c8a8;  /* eyebrow pill border */
+  --brand-orange-shadow: rgba(232, 83, 14, 0.08); /* card hover shadow */
+
+  /* ── Ink / text ────────────────────────────────────────────── */
+  --ink:           #111;  /* headlines, dark surfaces */
+  --ink-soft:      #333;  /* heavy body, blockquote */
+  --text:          #555;  /* default body */
+  --text-muted:    #777;  /* card paragraphs, subtitles */
+  --text-faint:    #999;  /* captions, footer links, role */
+  --text-disabled: #bbb;  /* footer copyright, placeholders */
+
+  /* ── Lines & surfaces ──────────────────────────────────────── */
+  --border:         #eee;
+  --surface:        #fff;  /* default page bg, hero, white cards */
+  --surface-gray:   #f8f8f8; /* alternating section bg, value/path cards */
+  --surface-footer: #fafafa;
+  --surface-dark:   #111;  /* CTA banner, dark sections */
+
+  /* ── Radius ────────────────────────────────────────────────── */
+  --radius-pill:       999px;
+  --radius-card-lg:    16px;
+  --radius-card:       12px;
+  --radius-button:     8px;
+  --radius-button-sm:  6px;
+  --radius-circle:     50%;
+
+  /* ── Spacing rhythm ────────────────────────────────────────── */
+  --section-py-desktop: 100px;
+  --section-py-mobile:  72px;
+  --hero-pt-desktop:    160px;
+  --hero-pt-mobile:     140px;
+  --section-px:         6%;
+  --gap-card:           32px;
+  --gap-card-tight:     28px;
+  --gap-team:           60px;
+
+  /* ── Container max widths ──────────────────────────────────── */
+  --container-footer:    1200px;
+  --container-programs:  1000px;
+  --container-paths:     960px;
+  --container-partners:  900px;
+  --container-stats:     800px;
+  --container-values:    760px;
+  --container-testim:    720px;
+  --container-subtitle:  560px;
+  --container-hero-tag:  600px;
+  --container-cta-copy:  480px;
+
+  /* ── Motion ────────────────────────────────────────────────── */
+  --transition-fast: .2s;
+  --transition-base: .3s;
+  --transition-nav:  .35s;
+  --ease:            ease;
+
+  /* ── Typography — family ───────────────────────────────────── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* ── Typography — semantic roles (px values clamp at desktop) ── */
+  --h1-size:   clamp(40px, 7vw, 80px);
+  --h1-weight: 900;
+  --h1-track:  -1px;
+  --h1-lh:     1.05;
+
+  --h2-size:   clamp(28px, 4vw, 48px);
+  --h2-weight: 800;
+  --h2-track:  -0.5px;
+  --h2-lh:     1.15;
+
+  --h2-cta-size:   clamp(32px, 5vw, 56px);  /* CTA banner */
+  --h2-cta-weight: 900;
+
+  --stat-size:   clamp(36px, 5vw, 56px);
+  --stat-weight: 900;
+  --stat-track:  -1px;
+
+  --h3-size:   28px;  /* path card / team name */
+  --h3-weight: 800;
+  --h3-track:  -0.3px;
+
+  --h4-size:   20px;  /* step / program card */
+  --h4-weight: 700;
+
+  --h4-sm-size:   18px; /* value card */
+  --h4-sm-weight: 700;
+  --h4-sm-track:  -0.2px;
+
+  --tagline-size:   clamp(16px, 2.5vw, 22px);
+  --tagline-weight: 400;
+  --tagline-track:  0.5px;
+
+  --subtitle-size:   17px;
+  --subtitle-weight: 400;
+  --subtitle-lh:     1.7;
+
+  --testim-size:   20px;
+  --testim-weight: 500;
+  --testim-lh:     1.8;
+
+  --body-size:   15px;     /* card paragraphs */
+  --body-sm:     14px;
+  --body-weight: 400;
+  --body-lh:     1.7;
+
+  --nav-size:   13px;
+  --nav-weight: 600;
+  --nav-track:  0.5px;     /* + UPPERCASE */
+
+  --btn-size:   14px;
+  --btn-weight: 700;
+  --btn-track:  0.5px;     /* + UPPERCASE */
+
+  --btn-cta-size:  15px;
+  --btn-cta-track: 1px;
+
+  --eyebrow-size:   12px;
+  --eyebrow-weight: 700;
+  --eyebrow-track:  1.5px;  /* + UPPERCASE */
+
+  --label-faint-size: 11px;
+  --label-faint-track: 2px; /* partners-label */
+}
+
+/* ── Semantic helpers (drop-in classes) ──────────────────────── */
+.r1-h1 {
+  font-family: var(--font-sans);
+  font-size: var(--h1-size);
+  font-weight: var(--h1-weight);
+  letter-spacing: var(--h1-track);
+  line-height: var(--h1-lh);
+  color: var(--ink);
+}
+.r1-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--h2-size);
+  font-weight: var(--h2-weight);
+  letter-spacing: var(--h2-track);
+  line-height: var(--h2-lh);
+  color: var(--ink);
+}
+.r1-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--h3-size);
+  font-weight: var(--h3-weight);
+  letter-spacing: var(--h3-track);
+  color: var(--ink);
+}
+.r1-h4 {
+  font-family: var(--font-sans);
+  font-size: var(--h4-size);
+  font-weight: var(--h4-weight);
+  color: var(--ink);
+}
+.r1-tagline {
+  font-family: var(--font-sans);
+  font-size: var(--tagline-size);
+  font-weight: var(--tagline-weight);
+  letter-spacing: var(--tagline-track);
+  color: var(--text-muted);
+}
+.r1-subtitle {
+  font-family: var(--font-sans);
+  font-size: var(--subtitle-size);
+  line-height: var(--subtitle-lh);
+  color: var(--text-muted);
+}
+.r1-body {
+  font-family: var(--font-sans);
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  line-height: var(--body-lh);
+  color: var(--text-muted);
+}
+.r1-eyebrow {
+  font-family: var(--font-sans);
+  display: inline-block;
+  background: var(--brand-orange-tint);
+  color: var(--brand-orange);
+  border: 1px solid var(--brand-orange-border);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: var(--eyebrow-size);
+  font-weight: var(--eyebrow-weight);
+  letter-spacing: var(--eyebrow-track);
+  text-transform: uppercase;
+}
+.r1-btn-label {
+  font-family: var(--font-sans);
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
+  letter-spacing: var(--btn-track);
+  text-transform: uppercase;
+}
+.r1-nav-link {
+  font-family: var(--font-sans);
+  font-size: var(--nav-size);
+  font-weight: var(--nav-weight);
+  letter-spacing: var(--nav-track);
+  text-transform: uppercase;
+  color: var(--text);
+}
+.r1-stat-num {
+  font-family: var(--font-sans);
+  font-size: var(--stat-size);
+  font-weight: var(--stat-weight);
+  letter-spacing: var(--stat-track);
+  color: var(--brand-orange);
+  line-height: 1;
+}
