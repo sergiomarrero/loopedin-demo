@@ -6,8 +6,69 @@ import ReactDOM from 'react-dom/client';
 import { orgApi, adminApi, getToken, setToken, DEMO_ORG_EMAIL } from '../api';
 
 
+// ── Accessibility helpers (a11y + mobile overhaul) ───────────────────────────
+// Lets a non-button element with role="button" fire on Enter / Space, matching
+// native button semantics for keyboard users.
+function keyActivate(handler) {
+  return (e) => {
+    if (!handler) return;
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      handler(e);
+    }
+  };
+}
+
+// Dialog behaviour for modal sheets: trap Tab focus inside the dialog, close on
+// Escape, move focus in on open, and restore it to the trigger on close.
+function useDialog(onClose) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const prev = document.activeElement;
+    const node = ref.current;
+    const focusable = () => node
+      ? Array.from(node.querySelectorAll(
+          'a[href],button:not([disabled]),textarea,input:not([disabled]),select,[tabindex]:not([tabindex="-1"])'))
+          .filter(el => el.offsetParent !== null)
+      : [];
+    (focusable()[0] || node)?.focus();
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); onClose && onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      if (prev && prev.focus) prev.focus();
+    };
+  }, []);
+  return ref;
+}
+
+// Real tab-bar glyphs — replace the first-letter placeholder for clearer nav.
+function TabIcon({ name }) {
+  const paths = {
+    dashboard: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
+    compose: <><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></>,
+    responses: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></>,
+    billing: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></>,
+  };
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[name] || null}
+    </svg>
+  );
+}
+
+
 // ===== source: b96dd088 =====
-// LoopedIn buyer console — mock data + model helpers.
+// LoopedIn researcher console — mock data + model helpers.
 // Points: 100 pts = $1.00. Point-per-response tiers are fixed: 0/50/100/150/200.
 // Plans: free | pro. Free = no point rewards, text only, no targeting/summaries.
 
@@ -201,7 +262,9 @@ function Btn({ children, kind = 'primary', sm, block, disabled, onClick, style }
 
 function Card({ children, gray, hover, className = '', style, onClick }) {
   const cls = `card${gray ? ' card-gray' : ''}${hover ? ' card-hover' : ''} ${className}`;
-  return <div className={cls} style={style} onClick={onClick}>{children}</div>;
+  const interactive = !!onClick;
+  return <div className={cls} style={style} onClick={onClick}
+    {...(interactive ? { role: 'button', tabIndex: 0, onKeyDown: keyActivate(onClick) } : {})}>{children}</div>;
 }
 
 function Field({ label, hint, children }) {
@@ -267,15 +330,18 @@ function Lock({ size = 13, c = 'currentColor' }) {
 // Segmented control.
 function Segmented({ options, value, onChange, disabledFn }) {
   return (
-    <div className="seg">
+    <div className="seg" role="radiogroup">
       {options.map(o => {
         const v = typeof o === 'object' ? o.value : o;
         const label = typeof o === 'object' ? o.label : o;
         const dis = disabledFn ? disabledFn(v) : false;
+        const on = value === v;
         return (
-          <div key={v}
-            className={`seg-opt${value === v ? ' on' : ''}${dis ? ' disabled' : ''}`}
-            onClick={() => !dis && onChange(v)}>
+          <div key={v} role="radio" aria-checked={on} aria-disabled={dis || undefined}
+            tabIndex={dis ? -1 : (on ? 0 : -1)}
+            className={`seg-opt${on ? ' on' : ''}${dis ? ' disabled' : ''}`}
+            onClick={() => !dis && onChange(v)}
+            onKeyDown={dis ? undefined : keyActivate(() => onChange(v))}>
             {label}
           </div>
         );
@@ -303,17 +369,19 @@ function Breakdown({ rows, ink }) {
 
 // Modal sheet.
 function Sheet({ title, sub, onClose, children, footer, wide }) {
+  const ref = useDialog(onClose);
   return (
     <div className="sheet-scrim" onClick={onClose}>
-      <div className="sheet" style={wide ? { maxWidth: 560 } : undefined} onClick={e => e.stopPropagation()}>
+      <div className="sheet" ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
+        style={wide ? { maxWidth: 560 } : undefined} onClick={e => e.stopPropagation()}>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
           <div>
             <div className="h-title" style={{ fontSize: 22 }}>{title}</div>
             {sub && <div className="h-sub" style={{ fontSize: 13, marginTop: 4 }}>{sub}</div>}
           </div>
-          <button onClick={onClose} style={{
-            border: 0, background: 'var(--surface-gray)', cursor: 'pointer',
-            width: 32, height: 32, borderRadius: '50%', fontSize: 18, color: 'var(--text-muted)', lineHeight: 1,
+          <button onClick={onClose} aria-label="Close" style={{
+            border: 0, background: 'var(--surface-gray)', cursor: 'pointer', flexShrink: 0,
+            width: 44, height: 44, borderRadius: '50%', fontSize: 20, color: 'var(--text-muted)', lineHeight: 1,
           }}>×</button>
         </div>
         <div style={{ marginTop: 18 }}>{children}</div>
@@ -324,9 +392,10 @@ function Sheet({ title, sub, onClose, children, footer, wide }) {
 }
 
 // Simple toggle switch.
-function Toggle({ on, onChange }) {
+function Toggle({ on, onChange, label }) {
   return (
-    <button onClick={() => onChange(!on)} style={{
+    <button onClick={() => onChange(!on)} role="switch" aria-checked={!!on} aria-label={label}
+      style={{
       width: 46, height: 27, borderRadius: 999, border: 0, cursor: 'pointer', flexShrink: 0,
       background: on ? 'var(--brand-orange)' : '#dcdcdc', position: 'relative', transition: 'background .2s',
     }}>
@@ -1115,7 +1184,10 @@ function ComposeScreen({ plan, balance, onSubmit, onCharge, onUpgrade, toast, re
 
 function AttrRow({ k, v, set, locked, onClick }) {
   return (
-    <div className={`attr-row${locked ? ' locked' : ''}`} onClick={onClick}>
+    <div className={`attr-row${locked ? ' locked' : ''}`} onClick={onClick}
+      role="button" tabIndex={locked ? -1 : 0} aria-disabled={locked || undefined}
+      aria-label={`${k}${v ? ': ' + v : ''}`}
+      onKeyDown={locked ? undefined : keyActivate(onClick)}>
       <span className="k">{locked && <Lock size={13} c="var(--text-faint)" />}{k}</span>
       {locked
         ? <ProTag />
@@ -1139,7 +1211,10 @@ function ImageUploadRow({ isPro, onUpgrade }) {
       border: `1px ${isPro ? 'solid' : 'dashed'} ${isPro ? 'var(--border-2)' : 'var(--border-2)'}`,
       borderRadius: 'var(--radius-button)', padding: 14, display: 'flex', alignItems: 'center', gap: 12,
       background: isPro ? 'var(--surface)' : 'var(--surface-gray)', cursor: isPro ? 'pointer' : 'not-allowed',
-    }} onClick={() => !isPro && onUpgrade()}>
+    }} onClick={() => !isPro && onUpgrade()}
+      role="button" tabIndex={0}
+      aria-label={isPro ? 'Add an image for respondents' : 'Add an image — upgrade to Pro to unlock'}
+      onKeyDown={keyActivate(() => !isPro && onUpgrade())}>
       <span className="num-badge" style={{ width: 38, height: 38, background: 'var(--surface)', border: '1px solid var(--border-2)', color: 'var(--text-faint)' }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></svg>
       </span>
@@ -1940,17 +2015,20 @@ function App() {
     <div className="app">
       {st.role === 'buyer' && (
         <header className="appbar">
-          <div className="appbar-brand" onClick={() => navigate('dashboard')}>
-            <span className="num-badge dark" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 15 }}>L</span>
+          <div className="appbar-brand" onClick={() => navigate('dashboard')}
+            role="button" tabIndex={0} aria-label="LoopedIn for researchers — go to dashboard"
+            onKeyDown={keyActivate(() => navigate('dashboard'))}>
+            <span className="num-badge dark" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 15 }} aria-hidden="true">L</span>
             <span style={{ fontWeight: 800, fontSize: 17, color: 'var(--ink)', letterSpacing: -0.3 }}>LoopedIn</span>
-            <span className="sub">for orgs</span>
+            <span className="sub">for researchers</span>
           </div>
-          <nav className="appbar-nav">
+          <nav className="appbar-nav" aria-label="Primary">
             {NAV.map(([id, label]) => {
               const pendingCount = id === 'dashboard' ? questions.filter(q => q.status === 'pending').length : 0;
               return (
-                <button key={id} className={st.screen === id ? 'active' : ''} onClick={() => navigate(id)}>
-                  {label}{pendingCount > 0 && <span className="pip">{pendingCount}</span>}
+                <button key={id} className={st.screen === id ? 'active' : ''}
+                  aria-current={st.screen === id ? 'page' : undefined} onClick={() => navigate(id)}>
+                  {label}{pendingCount > 0 && <span className="pip" aria-label={`${pendingCount} pending`}>{pendingCount}</span>}
                 </button>
               );
             })}
@@ -1970,10 +2048,11 @@ function App() {
 
       {/* Mobile bottom tabs */}
       {st.role === 'buyer' && (
-        <nav className="tabbar">
+        <nav className="tabbar" aria-label="Primary">
           {NAV.map(([id, label]) => (
-            <button key={id} className={st.screen === id ? 'active' : ''} onClick={() => navigate(id)}>
-              <span className="tnum-badge">{label[0]}</span>{label}
+            <button key={id} className={st.screen === id ? 'active' : ''}
+              aria-current={st.screen === id ? 'page' : undefined} onClick={() => navigate(id)}>
+              <TabIcon name={id} />{label}
             </button>
           ))}
         </nav>
@@ -1981,7 +2060,7 @@ function App() {
 
       {/* Prototype role switch */}
       <div className="proto-switch">
-        <button className={st.role === 'buyer' ? 'on' : ''} onClick={() => set({ role: 'buyer' })}>Buyer</button>
+        <button className={st.role === 'buyer' ? 'on' : ''} onClick={() => set({ role: 'buyer' })}>Researcher</button>
         <button className={st.role === 'admin' ? 'on' : ''} onClick={() => set({ role: 'admin' })}>Admin</button>
       </div>
 
@@ -2013,14 +2092,16 @@ function App() {
           onConfirm={(ptsAmt) => { chargeUp(ptsAmt); setCharge(null); }} />
       )}
 
-      {/* Toast */}
-      {toastMsg && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 95,
-          background: 'var(--ink)', color: '#fff', padding: '12px 20px', borderRadius: 999,
-          fontSize: 14, fontWeight: 600, boxShadow: '0 8px 28px rgba(0,0,0,0.25)',
-        }}>{toastMsg}</div>
-      )}
+      {/* Toast — announced to assistive tech via the live region. */}
+      <div role="status" aria-live="polite" aria-atomic="true">
+        {toastMsg && (
+          <div style={{
+            position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 95,
+            background: 'var(--ink)', color: '#fff', padding: '12px 20px', borderRadius: 999,
+            fontSize: 14, fontWeight: 600, boxShadow: '0 8px 28px rgba(0,0,0,0.25)',
+          }}>{toastMsg}</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2043,7 +2124,8 @@ function ChargeSheet({ need, balance, onClose, onConfirm }) {
       ]}>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {[50, 100, 250, 500].map(a => (
-          <span key={a} className={`chip${amt === a ? ' on' : ''}`} onClick={() => setAmt(a)}>${a}</span>
+          <span key={a} className={`chip${amt === a ? ' on' : ''}`} role="button" tabIndex={0}
+            aria-pressed={amt === a} onClick={() => setAmt(a)} onKeyDown={keyActivate(() => setAmt(a))}>${a}</span>
         ))}
       </div>
       <Field label="Or enter any amount">

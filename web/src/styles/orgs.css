@@ -1,5 +1,5 @@
 /*
-   LoopedIn for Orgs — buyer console
+   LoopedIn for Researchers — researcher console
    Built strictly on the Rebel One Design System.
    Orange (#e8530e) is the ONLY accent. Flat surfaces, 1px borders,
    numbered badges instead of icons, Inter throughout.
@@ -23,9 +23,9 @@
   --ink:           #111;
   --ink-soft:      #333;
   --text:          #555;
-  --text-muted:    #777;
-  --text-faint:    #999;
-  --text-disabled: #bbb;
+  --text-muted:    #6f6f6f;
+  --text-faint:    #6b6b6b;   /* darkened from #999 to clear WCAG AA (4.5:1) */
+  --text-disabled: #949494;   /* placeholders — darkened for contrast */
 
   --border:         #eee;
   --border-2:       #e2e2e2;
@@ -45,9 +45,13 @@
 }
 
 * { box-sizing: border-box; }
+/* Root at 100% so the UI honours the OS / browser font-size (dynamic type).
+   Type scale below is expressed in rem so it scales with this base. */
+html { font-size: 100%; -webkit-text-size-adjust: 100%; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--font-sans);
+  font-size: 1rem;
   background: var(--surface-gray);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -133,8 +137,8 @@ button { font-family: inherit; }
   padding: 5px 12px; border-radius: var(--radius-pill);
   font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
 }
-.h-title { font-size: 34px; font-weight: 900; letter-spacing: -0.8px; color: var(--ink); line-height: 1.1; margin: 0; }
-.h-sub { font-size: 15px; line-height: 1.6; color: var(--text-muted); margin: 8px 0 0; }
+.h-title { font-size: 2.125rem; font-weight: 900; letter-spacing: -0.8px; color: var(--ink); line-height: 1.1; margin: 0; }
+.h-sub { font-size: 0.9375rem; line-height: 1.6; color: var(--text-muted); margin: 8px 0 0; }
 .section-label {
   font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
   color: var(--text-faint); margin: 0 0 14px;
@@ -163,8 +167,8 @@ button { font-family: inherit; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   border: 1px solid transparent; cursor: pointer; white-space: nowrap;
-  font-size: 14px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
-  padding: 13px 24px; border-radius: var(--radius-button);
+  font-size: 0.875rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  padding: 13px 24px; border-radius: var(--radius-button); min-height: 44px;
   transition: background .2s, border-color .2s, transform .15s, color .2s;
 }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -180,12 +184,13 @@ button { font-family: inherit; }
 .btn-block { width: 100%; }
 
 /* Inputs */
-.field-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 7px; display: block; }
+.field-label { font-size: 0.8125rem; font-weight: 600; color: var(--text); margin-bottom: 7px; display: block; }
 .input, .textarea, .select {
   width: 100%; box-sizing: border-box;
   border: 1px solid var(--border-2); border-radius: var(--radius-button);
   background: var(--surface); color: var(--ink);
-  font-family: inherit; font-size: 15px; padding: 12px 14px;
+  /* 16px (1rem) min so iOS Safari does not zoom the page on focus. */
+  font-family: inherit; font-size: 1rem; padding: 12px 14px;
   outline: none; transition: border-color .2s;
 }
 .input:focus, .textarea:focus, .select:focus { border-color: var(--brand-orange); }
@@ -336,14 +341,12 @@ button { font-family: inherit; }
 }
 .tabbar button {
   flex: 1; background: none; border: 0; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
-  color: var(--text-faint); padding: 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+  color: var(--text-faint); padding: 6px 4px; min-height: 52px; border-radius: 10px;
 }
 .tabbar button.active { color: var(--brand-orange); }
-.tabbar .tnum-badge {
-  font-size: 14px; font-weight: 800; line-height: 1;
-}
+.tabbar button svg { width: 22px; height: 22px; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
@@ -365,3 +368,49 @@ html[data-density="spacious"] .grid-2, html[data-density="spacious"] .grid-3 { g
 html[data-density="spacious"] .section-label { margin-bottom: 20px; }
 html[data-density="spacious"] .launch-bar { padding: 24px; }
 html[data-density="spacious"] .col { gap: inherit; }
+
+/* ══ Accessibility + mobile overhaul ════════════════════════════════════════ */
+
+/* Visible keyboard focus on every interactive surface (mouse clicks stay clean
+   via :focus-visible). */
+:focus-visible {
+  outline: 2px solid var(--brand-orange);
+  outline-offset: 2px;
+  border-radius: var(--radius-button-sm);
+}
+.input:focus-visible, .textarea:focus-visible, .select:focus-visible {
+  outline: 2px solid var(--brand-orange-border);
+  outline-offset: 1px;
+  border-color: var(--brand-orange);
+}
+
+/* Minimum 44px touch targets (WCAG 2.5.5 / Apple HIG) on the smaller controls. */
+.btn-sm { min-height: 44px; }
+.seg-opt { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+.chip { min-height: 36px; }
+.appbar-nav button { min-height: 40px; }
+.attr-row { min-height: 48px; }
+.balance .charge { min-height: 36px; }
+
+/* role="button" / role="radio" divs should show the hand cursor like buttons. */
+[role="button"], [role="radio"] { cursor: pointer; }
+[role="button"][aria-disabled="true"] { cursor: not-allowed; }
+
+/* Honour reduced-motion: drop the transitions/animations app-wide. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Mobile: roomier tap spacing in the compose form + safe sticky CTA. */
+@media (max-width: 768px) {
+  .seg { gap: 8px; }
+  .attr-row { padding: 15px; }
+  .launch-bar { margin-bottom: 8px; }
+  /* keep the sticky launch bar clear of the bottom tab bar */
+  .page-inner { padding-bottom: 140px; }
+}
