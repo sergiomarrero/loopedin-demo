@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="LoopedIn">
+  <rect width="128" height="128" rx="28" fill="#ffffff"/>
+  <g transform="translate(16 27) scale(0.74)" fill="#e8530e">
+    <circle cx="27" cy="21" r="13"/>
+    <ellipse cx="36" cy="63" rx="17" ry="23" transform="rotate(-20 36 63)"/>
+    <circle cx="65" cy="18" r="14"/>
+    <ellipse cx="65" cy="64" rx="20" ry="27"/>
+    <circle cx="102" cy="21" r="12"/>
+    <ellipse cx="102" cy="63" rx="17" ry="23" transform="rotate(8 102 63)"/>
+  </g>
+</svg>
