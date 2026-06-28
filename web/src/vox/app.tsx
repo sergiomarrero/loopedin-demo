@@ -154,7 +154,7 @@ function Themes({ themes, scopeTitle, crossOrg }: { themes: Theme[]; scopeTitle:
       {themes.map((t, i) => (
         <div className="card" key={i}>
           <div className="card-head">
-            <span className="num" style={{ display: 'inline-flex', width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 999, background: 'var(--surface-gray)', fontSize: 12, fontWeight: 800, color: 'var(--text-faint)' }}>{i + 1}</span>
+            <span className="num" style={{ display: 'inline-flex', width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 999, background: 'var(--vchip)', fontSize: 12, fontWeight: 800, color: 'var(--vmuted)', flex: 'none' }}>{i + 1}</span>
             <h3>{t.label}</h3>
             <span className="weight">{t.weightPct}%</span>
             <span className="muted" style={{ fontSize: 12 }}>· {t.answerCount} answers · {sentimentLabel(t.sentiment)}</span>
@@ -212,17 +212,17 @@ function SentimentView({ s, themes }: { s: Sentiment; themes: Theme[] }) {
     <>
       <div className="card">
         <div className="card-head"><h3>Distribution</h3><span className="muted" style={{ fontSize: 12 }}>· {total} answers</span></div>
-        <div className="meter-row"><span className="k">Positive</span><div className="bar"><span style={{ width: pct(s.positive / total) }} /></div><span className="v">{s.positive}</span></div>
-        <div className="meter-row"><span className="k">Mixed / neutral</span><div className="bar"><span style={{ width: pct(s.neutral / total), background: 'var(--brand-orange-border)' }} /></div><span className="v">{s.neutral}</span></div>
-        <div className="meter-row"><span className="k">Negative</span><div className="bar"><span style={{ width: pct(s.negative / total) }} /></div><span className="v">{s.negative}</span></div>
-        <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>Average emotional intensity <b style={{ color: 'var(--ink)' }}>{pct(s.avgIntensity)}</b>. Benefits, justice and health topics carry the highest intensity and are weighted for attention.</p>
+        <div className="meter-row"><span className="k">Positive</span><div className="bar"><span style={{ width: pct(s.positive / total), background: 'var(--vgood)' }} /></div><span className="v">{s.positive}</span></div>
+        <div className="meter-row"><span className="k">Mixed / neutral</span><div className="bar"><span style={{ width: pct(s.neutral / total), background: 'var(--vwarn)' }} /></div><span className="v">{s.neutral}</span></div>
+        <div className="meter-row"><span className="k">Negative</span><div className="bar"><span style={{ width: pct(s.negative / total), background: 'var(--vbad)' }} /></div><span className="v">{s.negative}</span></div>
+        <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>Average emotional intensity <b style={{ color: 'var(--vtxt)' }}>{pct(s.avgIntensity)}</b>. Benefits, justice and health topics carry the highest intensity and are weighted for attention.</p>
       </div>
       <div className="card">
         <div className="card-head"><h3>By theme</h3></div>
         {themes.map((t, i) => (
           <div className="meter-row" key={i}>
             <span className="k">{t.label}</span>
-            <div className="bar"><span style={{ width: pct((t.sentiment + 1) / 2), background: t.sentiment < -0.15 ? 'var(--brand-orange)' : 'var(--brand-orange-border)' }} /></div>
+            <div className="bar"><span style={{ width: pct((t.sentiment + 1) / 2), background: t.sentiment < -0.15 ? 'var(--vbad)' : t.sentiment > 0.15 ? 'var(--vgood)' : 'var(--vwarn)' }} /></div>
             <span className="v">{sentimentLabel(t.sentiment)}</span>
           </div>
         ))}
