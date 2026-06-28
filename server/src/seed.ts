@@ -1,4 +1,5 @@
 import { prisma } from './db.js';
+import { seedVox } from './vox/seed-vox.js';
 
 // ── Member feed questions (from the respondent prototype) ─────────────────────
 const PULSE_QUESTIONS = [
@@ -119,6 +120,10 @@ async function main() {
     members: await prisma.member.count(),
     answers: await prisma.answer.count(),
   });
+
+  // LoopedIn Vox insights data (additive — neutral orgs + 5 sessions + ~100
+  // synthetic answers + enrichment/signals/themes). Kept out of the member feed.
+  await seedVox();
 }
 
 main()
