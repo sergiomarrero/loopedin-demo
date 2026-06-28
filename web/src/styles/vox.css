@@ -53,7 +53,6 @@ body {
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 .shell { width: 100%; max-width: var(--shell-max); margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 232px 1fr; gap: 24px; }
-@media (max-width: 860px) { .shell { grid-template-columns: 1fr; } }
 
 .nav { display: flex; flex-direction: column; gap: 2px; align-self: start; position: sticky; top: 88px; }
 .nav button {
@@ -149,6 +148,7 @@ body {
 .banner b { color: var(--brand-orange); }
 
 /* health table */
+.htable-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .htable { width: 100%; border-collapse: collapse; }
 .htable th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-faint); padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .htable td { padding: 12px 10px; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text); }
@@ -162,3 +162,43 @@ body {
 .spark .cl { font-size: 11px; color: var(--text-faint); }
 
 .foot { padding: 24px; text-align: center; font-size: 12px; color: var(--text-faint); }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────────
+   The desktop layout is a sticky 2-column grid (sticky left nav + content). On a
+   phone the columns must STACK, and the nav must NOT stay sticky — a sticky nav
+   in a stacked layout pins itself over the content as you scroll (the reported
+   bug). Below 860px: appbar wraps to fit, nav becomes a wrapped tab strip, the
+   health table scrolls horizontally, and paddings tighten. */
+@media (max-width: 860px) {
+  .appbar {
+    position: sticky; top: 0;
+    height: auto; min-height: 56px;
+    flex-wrap: wrap; gap: 8px 12px; padding: 10px 16px;
+  }
+  .brand { flex: 1 1 auto; }
+  .synced { display: none; }                 /* declutter; Refresh button stays */
+
+  .shell { grid-template-columns: 1fr; padding: 16px; gap: 16px; }
+
+  /* Not sticky on mobile — render as a normal wrapped row of tabs at the top. */
+  .nav {
+    position: static; top: auto;
+    flex-direction: row; flex-wrap: wrap; gap: 6px;
+    align-self: stretch;
+  }
+  .nav button { flex: 0 0 auto; padding: 8px 12px; }
+  .nav button.on { box-shadow: inset 0 -2px 0 var(--brand-orange); } /* underline, not left-bar */
+  .nav .gate { margin-left: 4px; }
+
+  .page-head h1 { font-size: 22px; }
+  .scope-row { margin: 14px 0 18px; }
+
+  .card { padding: 16px; }
+  .htable { min-width: 540px; }              /* let the 6-col table scroll, not squash */
+}
+
+/* Very narrow phones: keep the appbar controls usable. */
+@media (max-width: 420px) {
+  .viewtoggle button { padding: 7px 10px; font-size: 11px; }
+  .btn { padding: 8px 12px; }
+}

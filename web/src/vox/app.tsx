@@ -260,21 +260,23 @@ function Demographics({ view, counts }: { view: View; counts: Record<string, num
 function Health({ rows }: { rows: typeof SESSIONS }) {
   return (
     <div className="card">
-      <table className="htable">
-        <thead><tr><th>Session</th><th>Collected</th><th>Fill rate</th><th>Voice</th><th>Time to fill</th><th>Drop-off</th></tr></thead>
-        <tbody>
-          {rows.map((s) => (
-            <tr key={s.id}>
-              <td className="s">{s.title}</td>
-              <td>{s.collected} / {s.target}</td>
-              <td>{pct(s.health.fillRate)}</td>
-              <td>{pct(s.health.voiceShare)}</td>
-              <td>{s.health.timeToFillDays}d</td>
-              <td>{pct(s.health.dropOff)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="htable-wrap">
+        <table className="htable">
+          <thead><tr><th>Session</th><th>Collected</th><th>Fill rate</th><th>Voice</th><th>Time to fill</th><th>Drop-off</th></tr></thead>
+          <tbody>
+            {rows.map((s) => (
+              <tr key={s.id}>
+                <td className="s">{s.title}</td>
+                <td>{s.collected} / {s.target}</td>
+                <td>{pct(s.health.fillRate)}</td>
+                <td>{pct(s.health.voiceShare)}</td>
+                <td>{s.health.timeToFillDays}d</td>
+                <td>{pct(s.health.dropOff)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
