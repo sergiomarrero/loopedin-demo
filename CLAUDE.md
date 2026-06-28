@@ -19,6 +19,18 @@ LoopedIn is a paid community-research network. Three surfaces + a landing page:
 
 The loop: **org composes → admin approves → member answers → anonymized responses flow back**.
 
+### Sibling: LoopedIn Vox (live insights)
+A **read-only** insights layer on top of LoopedIn's response data: emerging
+themes, urgent signals, sentiment, demographics, response-health, and
+cross-question/cross-org trends. `web/src/vox` → `web/vox.html`; API at
+`server/src/routes/vox.ts` (`/api/vox`) + `server/src/vox/*`. It **only reads**
+`Member/Org/Question/Answer` and writes only its own four additive tables
+(`Theme/SynthesisRun/UrgentSignal/AnswerEnrichment`) — it must not mutate LoopedIn
+data or touch the member/orgs/landing apps. Hard **Internal (RBL1) vs Org**
+permission boundary enforced at the data layer (§6 suppression). Deploys as a
+**separate Vercel project**. See `docs/vox-deploy.md` and the in-repo brief
+`docs/LoopedIn_Vox_Dashboard_Brief.md`.
+
 ## Stack & layout
 - Frontend: Vite + React + TypeScript (multi-page). Backend: Express + Prisma + SQLite. Auth: JWT.
 ```

@@ -90,3 +90,78 @@ model Answer {
 
   @@unique([questionId, memberId])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LoopedIn Vox — derived/cache tables (ADDITIVE).
+//
+// Vox is the live-insights layer on top of LoopedIn. It ONLY READS the entities
+// above (Member/Org/Question/Answer) and writes only the four tables below.
+// These reference existing rows by plain id string (no Prisma relation fields),
+// so the models above are intentionally left untouched — Vox cannot interfere
+// with LoopedIn's data. See server/src/vox/* and CLAUDE.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// A synthesized cluster of answers (the core Vox output). scope is the level the
+// cluster was computed at; scopeRefId points at the questionId/orgId (null for
+// cross_org). Cross-org themes are internal-RBL1-only — never served to an org.
+model Theme {
+  id                    String   @id @default(cuid())
+  scope                 String   // question | org | cross_org
+  scopeRefId            String? // questionId | orgId | null (cross_org)
+  label                 String
+  summary               String
+  weightPct             Int      @default(0) // share of answers in this theme, 0-100
+  representativeQuoteIds String  @default("[]") // JSON array of coded ids e.g. ["R-2841"]
+  answerCount           Int      @default(0)
+  sentimentScore        Float    @default(0) // -1..1
+  demographics          String   @default("{}") // JSON aggregate breakdown per theme
+  synthesisRunId        String?
+  createdAt             DateTime @default(now())
+
+  @@index([scope, scopeRefId])
+}
+
+// One execution of the synthesis pipeline. Lets the UI show "last synthesized N
+// hours ago" and which model produced a set of themes.
+model SynthesisRun {
+  id            String    @id @default(cuid())
+  scope         String    // question | org | cross_org
+  scopeRefId    String?
+  trigger       String    @default("scheduled") // scheduled | on_demand
+  model         String    @default("") // synthesis model id used
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  answerCountIn Int       @default(0)
+  status        String    @default("running") // running | complete | failed
+
+  @@index([scope, scopeRefId])
+}
+
+// An answer that tripped the urgent-signal classifier. Internal-RBL1-only; never
+// surfaced in the org view (parent brief §5.4). Dashboard-flag only this build.
+model UrgentSignal {
+  id         String    @id @default(cuid())
+  answerId   String    @unique
+  type       String    // safety_crisis | fraud_spam
+  severity   String    @default("medium") // low | medium | high
+  rationale  String    @default("")
+  status     String    @default("new") // new | reviewed | dismissed
+  detectedAt DateTime  @default(now())
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  @@index([status])
+}
+
+// Per-answer derived data, cached so models don't re-run. transcript holds voice
+// text (mock = the text answer); embedding is the clustering vector as JSON.
+model AnswerEnrichment {
+  id                String   @id @default(cuid())
+  answerId          String   @unique
+  sentimentScore    Float    @default(0) // -1..1
+  emotionalIntensity Float   @default(0) // 0..1
+  transcript        String? // voice transcript (mock = text)
+  embedding         String   @default("[]") // JSON number[] clustering vector
+  flaggedTypes      String   @default("[]") // JSON array: ["safety_crisis"] etc.
+  createdAt         DateTime @default(now())
+}

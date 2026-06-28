@@ -1,0 +1,217 @@
+/* LoopedIn Vox — live insights dashboard.
+   MOBILE-FIRST. Base rules target a phone; min-width media queries layer on the
+   sidebar + multi-column layout for tablet/desktop.
+
+   Palette matched to the reference dashboard (GitHub-dark style): dark surfaces,
+   blue accent, semantic green/red/amber. This intentionally departs from the
+   Rebel One light/orange system for the Vox surface only. */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Reference palette ─────────────────────────────────────── */
+  --vbg:           #0e1116;  /* page background */
+  --vpanel:        #161b22;  /* cards / panels */
+  --vpanel2:       #1c2330;  /* raised panel / inputs */
+  --vline:         #2b3340;  /* borders */
+  --vtxt:          #e6edf3;  /* primary text */
+  --vmuted:        #9aa7b4;  /* secondary text */
+  --vfaint:        #6e7d8d;  /* captions */
+  --vaccent:       #58a6ff;  /* primary accent (links, active, bars) */
+  --vaccent-strong:#1f6feb;  /* solid buttons */
+  --vaccent2:      #7ee787;  /* secondary accent */
+  --vgood:         #3fb950;  /* positive */
+  --vbad:          #f85149;  /* danger / negative */
+  --vwarn:         #d29922;  /* warning */
+  --vchip:         #21262d;  /* chip / track */
+  --vaccent-tint:  rgba(88, 166, 255, 0.13);
+  --vgood-tint:    #10341c;
+  --vbad-tint:     #3a1416;
+  --vwarn-tint:    #2a2118;
+
+  --vfont: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --r-card: 12px;
+  --r-btn: 8px;
+  --r-pill: 20px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--vfont);
+  font-size: 14px;
+  color: var(--vtxt);
+  background: var(--vbg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── Top bar (mobile-first: wraps; becomes a single row ≥860px) ───────────── */
+.appbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+  padding: 10px 16px;
+  background: rgba(14, 17, 22, 0.85); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--vline);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; font-weight: 700; color: var(--vtxt); letter-spacing: -0.2px; flex: 1 1 auto; }
+.brand .vox { color: var(--vaccent); }
+.brand .tag { font-size: 11px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--vfaint); }
+.appbar-spacer { display: none; }
+.synced { display: none; font-size: 12px; color: var(--vfaint); }
+.synced b { color: var(--vmuted); font-weight: 600; }
+
+/* View toggle (Internal / Org) */
+.viewtoggle { display: inline-flex; border: 1px solid var(--vline); border-radius: var(--r-pill); overflow: hidden; background: var(--vpanel); }
+.viewtoggle button {
+  font-family: var(--vfont); font-size: 12px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase;
+  padding: 7px 13px; border: 0; background: transparent; color: var(--vmuted); cursor: pointer;
+}
+.viewtoggle button.on { background: var(--vaccent-strong); color: #fff; }
+
+.btn {
+  font-family: var(--vfont); font-size: 13px; font-weight: 600; letter-spacing: 0.2px;
+  padding: 8px 14px; border-radius: var(--r-btn); border: 1px solid var(--vaccent-strong);
+  background: var(--vaccent-strong); color: #fff; cursor: pointer; transition: filter 0.2s ease;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn.ghost { background: transparent; color: var(--vaccent); border-color: var(--vline); }
+.btn.ghost:hover { background: var(--vaccent-tint); filter: none; }
+.btn:disabled { opacity: 0.5; cursor: default; filter: none; }
+
+/* ── Layout (mobile-first: single column; sidebar grid ≥860px) ───────────── */
+.shell { width: 100%; max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+/* Nav: mobile = wrapped tab strip (NOT sticky — a sticky strip overlaps content
+   when the layout is single-column). Desktop = sticky vertical sidebar. */
+.nav { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.nav button {
+  display: flex; align-items: center; gap: 9px; text-align: left;
+  font-family: var(--vfont); font-size: 14px; font-weight: 500; color: var(--vmuted);
+  padding: 8px 12px; border: 0; background: transparent; border-radius: var(--r-btn); cursor: pointer;
+}
+.nav button:hover { background: var(--vpanel); color: var(--vtxt); }
+.nav button.on { background: var(--vpanel); color: var(--vtxt); box-shadow: inset 0 -2px 0 var(--vaccent); }
+.nav .num {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: var(--r-pill); background: var(--vchip); color: var(--vmuted);
+  font-size: 12px; font-weight: 700; flex: none;
+}
+.nav button.on .num { background: var(--vaccent); color: #0b0f14; }
+.nav .gate { margin-left: 4px; font-size: 11px; color: var(--vfaint); }
+
+.main { min-width: 0; }
+.page-head { margin: 0 0 16px; }
+.page-head h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; color: var(--vtxt); margin: 0 0 4px; }
+.page-head p { margin: 0; font-size: 13.5px; color: var(--vmuted); max-width: 64ch; line-height: 1.6; }
+.scope-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 18px; }
+.chip-toggle {
+  font-family: var(--vfont); font-size: 12px; font-weight: 500; color: var(--vmuted);
+  padding: 6px 12px; border: 1px solid var(--vline); background: var(--vpanel); border-radius: var(--r-pill); cursor: pointer;
+}
+.chip-toggle:hover { color: var(--vtxt); }
+.chip-toggle.on { border-color: var(--vaccent); color: var(--vaccent); background: var(--vaccent-tint); }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.card { background: var(--vpanel); border: 1px solid var(--vline); border-radius: var(--r-card); padding: 16px; }
+.card + .card { margin-top: 14px; }
+.card-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.card-head h3 { font-size: 16px; font-weight: 700; color: var(--vtxt); margin: 0; letter-spacing: -0.1px; }
+.weight { font-size: 13px; font-weight: 700; color: var(--vaccent); }
+.muted { color: var(--vmuted); }
+.summary { font-size: 13.5px; line-height: 1.65; color: var(--vmuted); margin: 6px 0 12px; }
+
+/* Auto-fit grids — naturally responsive (mobile-first, no breakpoint needed). */
+.grid { display: grid; gap: 12px; }
+.grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+
+.stat { background: var(--vpanel2); border: 1px solid var(--vline); border-radius: var(--r-card); padding: 14px 16px; }
+.stat .n { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: var(--vaccent); line-height: 1; }
+.stat .l { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--vfaint); margin-top: 6px; }
+
+/* weight + sentiment bars */
+.bar { height: 8px; border-radius: var(--r-pill); background: var(--vchip); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--vaccent); }
+.meter-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 8px 0; }
+.meter-row .k { font-size: 13px; color: var(--vtxt); }
+.meter-row .v { font-size: 13px; font-weight: 600; color: var(--vmuted); min-width: 38px; text-align: right; }
+
+/* quotes */
+.quote { border-left: 2px solid var(--vaccent); padding: 4px 0 4px 14px; margin: 10px 0; }
+.quote p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--vtxt); }
+.quote .meta { margin-top: 6px; font-size: 12px; color: var(--vfaint); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.code { font-weight: 700; color: var(--vaccent); }
+.attr { background: var(--vchip); border-radius: var(--r-pill); padding: 2px 9px; color: var(--vmuted); }
+
+/* demographic cells */
+.cells { display: flex; flex-direction: column; gap: 8px; }
+.cell { display: grid; grid-template-columns: 1fr 72px 40px; align-items: center; gap: 10px; }
+.cell .lab { font-size: 13px; color: var(--vtxt); }
+.cell .bar { grid-column: 2; }
+.cell .ct { font-size: 13px; font-weight: 700; text-align: right; color: var(--vtxt); }
+.cell.suppressed .lab { color: var(--vfaint); }
+.suppressed-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--vfaint); font-style: italic; }
+.lock::before { content: '\01F512'; font-style: normal; } /* the one allowed gated-control glyph */
+
+/* signals */
+.signal { border: 1px solid var(--vline); border-radius: var(--r-card); padding: 14px 16px; background: var(--vpanel); }
+.signal + .signal { margin-top: 10px; }
+.signal.crisis { border-left: 3px solid var(--vbad); background: linear-gradient(90deg, rgba(248,81,73,0.06), transparent 40%); }
+.sig-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.tagpill { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; padding: 3px 9px; border-radius: var(--r-pill); }
+.tagpill.crisis { background: var(--vbad-tint); color: var(--vbad); }
+.tagpill.fraud { background: var(--vwarn-tint); color: var(--vwarn); }
+.sev { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--vfaint); }
+.signal p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--vtxt); }
+.signal .why { font-size: 12px; color: var(--vmuted); margin-top: 8px; }
+.sig-actions { display: flex; gap: 8px; margin-top: 12px; }
+.sig-actions button { font-family: var(--vfont); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--vline); background: var(--vpanel2); color: var(--vtxt); cursor: pointer; }
+.sig-actions button:hover { border-color: var(--vaccent); color: var(--vaccent); }
+.signal.done { opacity: 0.5; }
+
+/* gated / empty states */
+.gated { text-align: center; padding: 40px 20px; }
+.gated .lock { font-size: 26px; }
+.gated h3 { margin: 12px 0 6px; font-size: 17px; color: var(--vtxt); }
+.gated p { margin: 0 auto; max-width: 48ch; font-size: 13.5px; color: var(--vmuted); line-height: 1.6; }
+
+.banner { background: var(--vaccent-tint); border: 1px solid rgba(88,166,255,0.28); border-radius: var(--r-card); padding: 12px 14px; font-size: 13px; color: var(--vtxt); margin-bottom: 18px; line-height: 1.55; }
+.banner b { color: var(--vaccent); }
+
+/* health table (horizontal scroll when it can't fit) */
+.htable-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.htable { width: 100%; min-width: 540px; border-collapse: collapse; }
+.htable th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--vfaint); padding: 8px 10px; border-bottom: 1px solid var(--vline); }
+.htable td { padding: 12px 10px; border-bottom: 1px solid var(--vline); font-size: 13.5px; color: var(--vmuted); }
+.htable td.s { color: var(--vtxt); font-weight: 600; }
+
+/* trend sparkline */
+.spark { display: flex; align-items: flex-end; gap: 10px; height: 120px; padding-top: 8px; }
+.spark .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.spark .colbar { width: 100%; background: var(--vaccent); border-radius: 4px 4px 0 0; min-height: 4px; }
+.spark .colbar.neg { background: var(--vbad); }
+.spark .cl { font-size: 11px; color: var(--vfaint); }
+
+.foot { padding: 20px 16px 28px; text-align: center; font-size: 12px; color: var(--vfaint); }
+
+/* ── Tablet / desktop enhancements ───────────────────────────────────────── */
+@media (min-width: 860px) {
+  .appbar { flex-wrap: nowrap; gap: 16px; height: 60px; padding: 0 24px; }
+  .appbar-spacer { display: block; flex: 1; }
+  .synced { display: block; }
+  .brand { flex: 0 0 auto; }
+
+  .shell { grid-template-columns: 248px 1fr; gap: 24px; padding: 24px; }
+
+  /* Sidebar nav becomes a sticky vertical column. */
+  .nav { flex-direction: column; flex-wrap: nowrap; gap: 2px; align-self: start; position: sticky; top: 84px; }
+  .nav button { font-size: 14px; }
+  .nav button.on { box-shadow: inset 2px 0 0 var(--vaccent); }
+  .nav .gate { margin-left: auto; }
+
+  .page-head h1 { font-size: 26px; }
+  .card { padding: 20px; }
+  .card-head h3 { font-size: 17px; }
+}

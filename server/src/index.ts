@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { memberRouter } from './routes/member.js';
 import { orgRouter } from './routes/org.js';
 import { adminRouter } from './routes/admin.js';
+import { voxRouter } from './routes/vox.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,6 +19,9 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/member', memberRouter);
 app.use('/api/org', orgRouter);
 app.use('/api/admin', adminRouter);
+// LoopedIn Vox — read-only insights layer (internal/org/export). Additive; does
+// not touch the routes above. See server/src/routes/vox.ts.
+app.use('/api/vox', voxRouter);
 
 // In production we serve the built frontend from the same origin, so the app's
 // relative `/api` calls work without any proxy or CORS config. (In dev, Vite
