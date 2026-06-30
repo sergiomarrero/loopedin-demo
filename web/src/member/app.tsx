@@ -643,40 +643,42 @@ const STREAK_HISTORY = [
 
 // ===== source: 4eafac61 =====
 // Pulse shared UI atoms.
-// PALETTE — built for trust + warmth + low-income community readability.
-//   Primary: deep money-green (#2E7D5F). Universally trusted color for $.
-//   Accent : warm orange (#F2994A) — used only for streak/celebration moments.
-//   Surface: warm cream (#FAFAF6) so the app reads friendly, not corporate-white.
-//   Ink    : warm near-black (#1A2A20), warm-mid (#5A6B62), warm-light (#8A9991).
-//   No blue (medical-tech feel), no neon, no gradients. Big type, generous spacing.
+// PALETTE — Rebel One design system. Orange #E8530E is the ONLY accent (brief,
+// load-bearing): no second hue. Built for trust + warmth + low-income community
+// readability.
+//   Primary: brand orange (#E8530E) — CTAs, money stamps, points, key moments.
+//   Accent : same orange — streak/celebration emphasis differs by tint, not hue.
+//   Surface: warm cream (#FBF8F4) so the app reads friendly, not corporate-white.
+//   Ink    : warm near-black (#1C1B19), warm-mid (#6B635E), warm-light (#9A938D).
+//   No blue, no green, no second accent, no neon, no gradients. Big type, generous spacing.
 // Icons: minimal outline glyphs only where mobile UX requires them (tab bar, mic, back).
 
-const GREEN        = '#2E7D5F';
-const GREEN_DARK   = '#1F5B43';
-const GREEN_TINT   = '#E8F2EC';
-const GREEN_TINT_2 = '#D2E5DA';
-const GREEN_BORDER = '#B5D9C7';
-const ACCENT       = '#F2994A';
-const ACCENT_DARK  = '#D87A2E';
-const ACCENT_TINT  = '#FFF1E0';
-const ACCENT_BORDER= '#F5C9A0';
-const INK          = '#1A2A20';
-const INK_2        = '#34433A';
-const INK_3        = '#5A6B62';
-const INK_4        = '#8A9991';
-const INK_5        = '#B5C0BA';
+const PRIMARY        = '#E8530E';
+const PRIMARY_DARK   = '#D14A0B';
+const PRIMARY_TINT   = '#FFF1E8';
+const PRIMARY_TINT_2 = '#FDE3D1';
+const PRIMARY_BORDER = '#F7C8A8';
+const ACCENT       = '#E8530E';
+const ACCENT_DARK  = '#D14A0B';
+const ACCENT_TINT  = '#FFF1E8';
+const ACCENT_BORDER= '#F7C8A8';
+const INK          = '#1C1B19';
+const INK_2        = '#2E2A27';
+const INK_3        = '#6B635E';
+const INK_4        = '#9A938D';
+const INK_5        = '#C6BEB6';
 const SURFACE      = '#FFFFFF';
-const SURFACE_WARM = '#FAFAF6';
-const SURFACE_TINT = '#F2F1EA';
-const BORDER       = '#E4E2DA';
-const BORDER_2     = '#D4D1C5';
+const SURFACE_WARM = '#FBF8F4';
+const SURFACE_TINT = '#F5F0EA';
+const BORDER       = '#ECE6DE';
+const BORDER_2     = '#DBD3C9';
 const DANGER       = '#B23B2E';
 const DANGER_TINT  = '#FBEAE7';
 
 // ---------- Eyebrow chip (small uppercase tag) ----------
 function Eyebrow({ children, tone = 'green', style = {} }) {
   const tones = {
-    green:  { bg: GREEN_TINT,   fg: GREEN_DARK, bd: GREEN_BORDER },
+    green:  { bg: PRIMARY_TINT,   fg: PRIMARY_DARK, bd: PRIMARY_BORDER },
     accent: { bg: ACCENT_TINT,  fg: ACCENT_DARK, bd: ACCENT_BORDER },
     gray:   { bg: SURFACE_TINT, fg: INK_3, bd: BORDER },
     ink:    { bg: INK,          fg: '#fff', bd: INK },
@@ -704,7 +706,7 @@ function MoneyStamp({ cents, size = 'lg', kind = 'pill' }) {
     return (
       <div style={{
         display: 'inline-flex', alignItems: 'baseline',
-        background: GREEN, color: '#fff',
+        background: PRIMARY, color: '#fff',
         padding: size === 'lg' ? '6px 12px' : '4px 9px',
         borderRadius: 999,
         fontWeight: 800,
@@ -717,7 +719,7 @@ function MoneyStamp({ cents, size = 'lg', kind = 'pill' }) {
   // 'plain' — just text
   return (
     <span style={{
-      color: GREEN, fontWeight: 800,
+      color: PRIMARY, fontWeight: 800,
       fontSize: size === 'lg' ? 28 : 16,
       letterSpacing: -0.6, lineHeight: 1,
     }}>{centsFmt(cents)}</span>
@@ -744,10 +746,10 @@ function PButton({ children, onClick, kind = 'primary', size = 'lg', disabled, s
   let look;
   if (kind === 'primary') {
     look = {
-      background: disabled ? '#D8D6CB' : (hover ? GREEN_DARK : GREEN),
+      background: disabled ? '#D8D6CB' : (hover ? PRIMARY_DARK : PRIMARY),
       color: '#fff',
       transform: hover && !disabled ? 'translateY(-1px)' : 'translateY(0)',
-      boxShadow: disabled ? 'none' : (hover ? '0 6px 18px rgba(46,125,95,0.22)' : '0 2px 6px rgba(46,125,95,0.12)'),
+      boxShadow: disabled ? 'none' : (hover ? '0 6px 18px rgba(232,83,14,0.22)' : '0 2px 6px rgba(232,83,14,0.12)'),
     };
   } else if (kind === 'outline') {
     look = {
@@ -794,9 +796,9 @@ function PCard({ children, onClick, interactive = false, style = {}, surface = '
       onMouseLeave={() => interactive && setHover(false)}
       style={{
         background: bg,
-        border: `1px solid ${interactive && hover ? GREEN_BORDER : BORDER}`,
+        border: `1px solid ${interactive && hover ? PRIMARY_BORDER : BORDER}`,
         borderRadius: 16,
-        boxShadow: interactive && hover ? '0 10px 28px rgba(46,125,95,0.08)' : 'none',
+        boxShadow: interactive && hover ? '0 10px 28px rgba(232,83,14,0.08)' : 'none',
         transition: 'border-color .25s, box-shadow .25s, transform .15s',
         cursor: onClick ? 'pointer' : 'default',
         transform: interactive && hover ? 'translateY(-1px)' : 'translateY(0)',
@@ -814,7 +816,7 @@ function NumBadge({ n, tone = 'ink', size = 36 }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
-      background: isInk ? INK : GREEN,
+      background: isInk ? INK : PRIMARY,
       color: '#fff',
       fontWeight: 800,
       fontSize: size > 44 ? 20 : 15,
@@ -925,7 +927,7 @@ function TabBar({ active, onChange, anonymous }) {
               style={{
                 background: 'transparent', border: 0, padding: '8px 4px 6px',
                 minHeight: 56,
-                color: on ? GREEN : INK_4,
+                color: on ? PRIMARY : INK_4,
                 display: 'flex', flexDirection: 'column',
                 alignItems: 'center', gap: 4,
                 cursor: 'pointer',
@@ -1018,25 +1020,25 @@ function PointsCelebration({ cents, onDone }) {
       <div style={{
         position: 'absolute', top: '38%', left: '50%',
         width: 90, height: 90, borderRadius: '50%',
-        border: `3px solid ${GREEN}`,
+        border: `3px solid ${PRIMARY}`,
         transform: 'translate(-50%, -50%)',
         animation: 'confetti-ring 1.1s ease forwards',
       }} />
       <div style={{
         position: 'absolute', top: '38%', left: '50%',
         width: 90, height: 90, borderRadius: '50%',
-        border: `2px solid ${GREEN_BORDER}`,
+        border: `2px solid ${PRIMARY_BORDER}`,
         transform: 'translate(-50%, -50%)',
         animation: 'confetti-ring 1.1s ease 0.15s forwards',
       }} />
       <div style={{
         position: 'absolute', top: '38%', left: '50%',
         animation: 'points-rise 1.4s cubic-bezier(0.25, 0.1, 0.25, 1) forwards',
-        color: GREEN,
+        color: PRIMARY,
         fontWeight: 900,
         fontSize: 56,
         letterSpacing: -1.5,
-        textShadow: '0 6px 24px rgba(46,125,95,0.25)',
+        textShadow: '0 6px 24px rgba(232,83,14,0.25)',
         whiteSpace: 'nowrap',
       }}>+{centsFmt(cents)}</div>
     </div>
@@ -1053,7 +1055,7 @@ function RBL1Mark({ size = 11 }) {
       style={{
         display: 'inline-flex', alignItems: 'baseline', gap: 0,
         fontSize: size, fontWeight: 800, letterSpacing: 0.5,
-        color: '#1A1C3A',
+        color: INK,
         fontFamily: 'inherit',
         textDecoration: 'none',
       }}
@@ -1064,7 +1066,7 @@ function RBL1Mark({ size = 11 }) {
 }
 
 // ---------- Progress ring ----------
-function ProgressRing({ size = 120, stroke = 8, progress = 0, color = GREEN, trackColor = SURFACE_TINT, children }) {
+function ProgressRing({ size = 120, stroke = 8, progress = 0, color = PRIMARY, trackColor = SURFACE_TINT, children }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const offset = c * (1 - Math.max(0, Math.min(1, progress)));
@@ -1099,7 +1101,7 @@ function TrustStrip({ items, dense = false }) {
         <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <div style={{
             width: 22, height: 22, borderRadius: '50%',
-            background: GREEN_TINT, color: GREEN_DARK,
+            background: PRIMARY_TINT, color: PRIMARY_DARK,
             flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             marginTop: 1,
@@ -1137,7 +1139,7 @@ function FeedScreen({ state, navigate, openAnswer }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <div style={{
               width: 30, height: 30, borderRadius: 10,
-              background: GREEN, color: '#fff', fontWeight: 900,
+              background: PRIMARY, color: '#fff', fontWeight: 900,
               fontSize: 16,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               letterSpacing: -0.5,
@@ -1223,7 +1225,7 @@ function FeedScreen({ state, navigate, openAnswer }) {
               </div>
             </div>
             <button onClick={() => navigate('profile')} style={{
-              background: GREEN, color: '#fff', border: 0,
+              background: PRIMARY, color: '#fff', border: 0,
               padding: '9px 14px', borderRadius: 999,
               fontWeight: 800, fontSize: 11, letterSpacing: 0.8,
               textTransform: 'uppercase', cursor: 'pointer', flexShrink: 0,
@@ -1233,11 +1235,11 @@ function FeedScreen({ state, navigate, openAnswer }) {
 
         {tab === 'browse' && !browseLocked && (
           <div style={{
-            padding: '14px 16px', background: GREEN_TINT,
-            border: `1px solid ${GREEN_BORDER}`, borderRadius: 14,
+            padding: '14px 16px', background: PRIMARY_TINT,
+            border: `1px solid ${PRIMARY_BORDER}`, borderRadius: 14,
             fontSize: 13, color: INK_2, lineHeight: 1.5,
           }}>
-            <strong style={{ color: GREEN_DARK }}>Heads up.</strong> Browse questions target specific lived experiences. If you answer one, we'll ask if it applies — honest answers keep results trustworthy.
+            <strong style={{ color: PRIMARY_DARK }}>Heads up.</strong> Browse questions target specific lived experiences. If you answer one, we'll ask if it applies — honest answers keep results trustworthy.
           </div>
         )}
 
@@ -1363,7 +1365,7 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
             <Eyebrow tone="gray">{q.buyerType}</Eyebrow>
             <div style={{
               display: 'inline-flex', alignItems: 'baseline', gap: 4,
-              background: GREEN, color: '#fff',
+              background: PRIMARY, color: '#fff',
               padding: '4px 9px', borderRadius: 999,
               fontWeight: 800, fontSize: 14, letterSpacing: -0.4, lineHeight: 1,
             }}>
@@ -1395,8 +1397,8 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
       {/* Qualifier prompt */}
       {needsQualifier && qualAnswer === null && (
         <div style={{ padding: '0 18px 16px' }}>
-          <PCard style={{ padding: 16, background: GREEN_TINT, borderColor: GREEN_BORDER }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: GREEN_DARK, letterSpacing: 1, marginBottom: 6 }}>
+          <PCard style={{ padding: 16, background: PRIMARY_TINT, borderColor: PRIMARY_BORDER }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: PRIMARY_DARK, letterSpacing: 1, marginBottom: 6 }}>
               QUICK CHECK
             </div>
             <div style={{ fontSize: 15, color: INK, marginBottom: 12, lineHeight: 1.45, fontWeight: 500 }}>
@@ -1444,7 +1446,7 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
         <div style={{ padding: '0 18px 20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
           {q.mode === 'voice' && (
             <button onClick={() => setMode('voice')} style={{
-              background: 'transparent', border: 0, color: GREEN_DARK,
+              background: 'transparent', border: 0, color: PRIMARY_DARK,
               fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 10,
               cursor: 'pointer', textAlign: 'left',
             }}>← Use voice instead</button>
@@ -1481,7 +1483,7 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
       {mode === 'voice' && (
         <div style={{ padding: '0 18px 20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
           <button onClick={() => setMode('text')} style={{
-            background: 'transparent', border: 0, color: GREEN_DARK,
+            background: 'transparent', border: 0, color: PRIMARY_DARK,
             fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 16,
             cursor: 'pointer', textAlign: 'left',
           }}>← Type instead</button>
@@ -1566,7 +1568,7 @@ function VoiceRecorder({ recState, recTime, onStart, onStop, onRestart }) {
         {recState === 'recording' && 'Listening… speak naturally. Tap to stop.'}
         {recState === 'recorded'  && (
           <span>
-            <span style={{ color: GREEN_DARK, fontWeight: 700 }}>Recording saved.</span>{' '}
+            <span style={{ color: PRIMARY_DARK, fontWeight: 700 }}>Recording saved.</span>{' '}
             <button onClick={onRestart} style={{ background: 'transparent', border: 0, color: INK_2, textDecoration: 'underline', cursor: 'pointer', fontSize: 13, padding: 0, fontFamily: 'inherit' }}>Re-record</button>
           </span>
         )}
@@ -1592,7 +1594,7 @@ function Waveform({ active, done }) {
           width: 4,
           height: `${h * 100}%`,
           borderRadius: 2,
-          background: done ? GREEN : active ? GREEN : INK_5,
+          background: done ? PRIMARY : active ? PRIMARY : INK_5,
           transformOrigin: 'center',
           animation: active ? `wave-bar 0.${4 + (i % 5)}s ease-in-out ${i * 30}ms infinite` : 'none',
           opacity: done ? 1 : active ? 1 : 0.7,
@@ -1610,12 +1612,12 @@ function RecordButton({ state, onStart, onStop }) {
       onClick={isRec ? onStop : isDone ? null : onStart}
       style={{
         width: 96, height: 96, borderRadius: '50%',
-        background: isDone ? GREEN : isRec ? DANGER : GREEN,
+        background: isDone ? PRIMARY : isRec ? DANGER : PRIMARY,
         color: '#fff', border: 'none', cursor: isDone ? 'default' : 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: isRec
           ? '0 0 0 12px rgba(178,59,46,0.12), 0 0 0 24px rgba(178,59,46,0.06)'
-          : '0 8px 24px rgba(46,125,95,0.25)',
+          : '0 8px 24px rgba(232,83,14,0.25)',
         transition: 'background .2s, box-shadow .2s',
       }}>
       {isDone
@@ -1678,7 +1680,7 @@ function ClaimScreen({ state, onClaim, onSkip }) {
         trailing={
           <div style={{
             display: 'inline-flex', alignItems: 'baseline', gap: 4,
-            background: GREEN, color: '#fff',
+            background: PRIMARY, color: '#fff',
             padding: '4px 9px', borderRadius: 999,
             fontWeight: 800, fontSize: 14, letterSpacing: -0.4, lineHeight: 1,
           }}>
@@ -1692,7 +1694,7 @@ function ClaimScreen({ state, onClaim, onSkip }) {
       />
 
       <div style={{ padding: '8px 22px 24px' }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: GREEN_DARK, letterSpacing: 1, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: PRIMARY_DARK, letterSpacing: 1, marginBottom: 8 }}>
           NICE WORK
         </div>
         <div style={{
@@ -1837,7 +1839,7 @@ function WalletScreen({ state, navigate }) {
             }}>{state.cents}</div>
             <div style={{
               fontSize: 9, fontWeight: 700, letterSpacing: 1.4,
-              color: GREEN, textTransform: 'uppercase', marginTop: 4,
+              color: PRIMARY, textTransform: 'uppercase', marginTop: 4,
             }}>Points</div>
           </div>
         </ProgressRing>
@@ -1859,8 +1861,8 @@ function WalletScreen({ state, navigate }) {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
           padding: '10px 14px',
-          background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`,
-          borderRadius: 12, color: GREEN_DARK,
+          background: PRIMARY_TINT, border: `1px solid ${PRIMARY_BORDER}`,
+          borderRadius: 12, color: PRIMARY_DARK,
           fontSize: 13, fontWeight: 600, letterSpacing: -0.1,
         }}>
           <span style={{ fontWeight: 800 }}>100 pts</span>
@@ -1872,10 +1874,10 @@ function WalletScreen({ state, navigate }) {
 
       <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {!state.claimed && (
-          <PCard style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12, background: '#fff8f3', border: `1px solid ${GREEN_BORDER}` }}>
+          <PCard style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12, background: '#fff8f3', border: `1px solid ${PRIMARY_BORDER}` }}>
             <div style={{
               width: 36, height: 36, borderRadius: '50%',
-              background: GREEN, color: '#fff', fontWeight: 800,
+              background: PRIMARY, color: '#fff', fontWeight: 800,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0, fontSize: 18,
             }}>!</div>
@@ -1883,7 +1885,7 @@ function WalletScreen({ state, navigate }) {
               <strong>Save your earnings.</strong> Add an email + phone so they stick.
             </div>
             <button onClick={() => navigate('claim')} style={{
-              background: GREEN, color: '#fff', border: 0,
+              background: PRIMARY, color: '#fff', border: 0,
               padding: '8px 12px', borderRadius: 999,
               fontWeight: 700, fontSize: 11, letterSpacing: 0.8,
               textTransform: 'uppercase', cursor: 'pointer', flexShrink: 0,
@@ -1947,7 +1949,7 @@ function WalletScreen({ state, navigate }) {
                   {h.mode === 'voice' ? 'Voice' : 'Text'} · {q?.buyer}
                 </div>
               </div>
-              <div style={{ color: GREEN, fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
+              <div style={{ color: PRIMARY, fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
                 +{centsFmt(h.cents)}
               </div>
             </div>
@@ -2033,7 +2035,7 @@ function ProfileScreen({ state, navigate, onUpdate }) {
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>Profile {Math.round(completion * 100)}% complete</div>
             <div style={{ fontSize: 11, color: INK_4, marginTop: 2 }}>
-              Earns an average of <strong style={{ color: GREEN }}>+30 pts</strong> more per question.
+              Earns an average of <strong style={{ color: PRIMARY }}>+30 pts</strong> more per question.
             </div>
           </div>
         </div>
@@ -2132,9 +2134,9 @@ function ProfileScreen({ state, navigate, onUpdate }) {
                 onUpdate({ profile: { ...p, tags: next } });
               }}
               style={{
-                border: `1px solid ${on ? GREEN : BORDER}`,
-                background: on ? GREEN_TINT : '#fff',
-                color: on ? GREEN : INK_2,
+                border: `1px solid ${on ? PRIMARY : BORDER}`,
+                background: on ? PRIMARY_TINT : '#fff',
+                color: on ? PRIMARY : INK_2,
                 padding: '10px 12px',
                 borderRadius: 10,
                 fontWeight: 600, fontSize: 13,
@@ -2149,9 +2151,9 @@ function ProfileScreen({ state, navigate, onUpdate }) {
                 <span style={{
                   fontSize: 9, letterSpacing: 0.8, textTransform: 'uppercase',
                   fontWeight: 700,
-                  color: verified ? GREEN : INK_4,
-                  background: verified ? GREEN_TINT : '#f0f0f0',
-                  border: `1px solid ${verified ? GREEN_BORDER : '#e3e3e3'}`,
+                  color: verified ? PRIMARY : INK_4,
+                  background: verified ? PRIMARY_TINT : '#f0f0f0',
+                  border: `1px solid ${verified ? PRIMARY_BORDER : '#e3e3e3'}`,
                   padding: '2px 5px', borderRadius: 4,
                 }}>
                   {verified ? 'Verified' : 'Verify +'}
@@ -2278,7 +2280,7 @@ function ToggleRow({ label, sub, value, onChange }) {
       </div>
       <div style={{
         width: 44, height: 26, borderRadius: 999,
-        background: value ? GREEN : '#e5e5e5',
+        background: value ? PRIMARY : '#e5e5e5',
         position: 'relative', flexShrink: 0,
         transition: 'background .2s',
       }}>
@@ -2310,7 +2312,7 @@ function ProfileRow({ label, value, onClick, cta, dim }) {
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: INK_4, textTransform: 'uppercase' }}>{label}</div>
         <div style={{ fontSize: 14, color: dim ? INK_5 : INK, marginTop: 2, fontWeight: 500 }}>{value}</div>
       </div>
-      {cta && <span style={{ color: GREEN, fontWeight: 700, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' }}>{cta}</span>}
+      {cta && <span style={{ color: PRIMARY, fontWeight: 700, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' }}>{cta}</span>}
       {onClick && !cta && <span style={{ color: INK_5, fontSize: 18 }}>→</span>}
     </button>
   );
@@ -2388,9 +2390,9 @@ function PickerSheet({ title, options, value, onPick, onClose, multi = false }) 
             return (
               <button key={opt} onClick={() => toggle(opt)} style={{
                 textAlign: 'left',
-                border: `1px solid ${on ? GREEN : BORDER}`,
-                background: on ? GREEN_TINT : '#fff',
-                color: on ? GREEN : INK,
+                border: `1px solid ${on ? PRIMARY : BORDER}`,
+                background: on ? PRIMARY_TINT : '#fff',
+                color: on ? PRIMARY : INK,
                 padding: '13px 14px',
                 borderRadius: 10,
                 fontFamily: 'inherit', fontSize: 14, fontWeight: on ? 700 : 500,
@@ -2542,7 +2544,7 @@ function BirthYearSheet({ value, onSave, onClose }) {
           autoFocus
           style={{
             width: '100%', boxSizing: 'border-box',
-            border: `1.5px solid ${underAge ? DANGER : (canSave ? GREEN : BORDER_2)}`,
+            border: `1.5px solid ${underAge ? DANGER : (canSave ? PRIMARY : BORDER_2)}`,
             background: '#fff',
             borderRadius: 12, padding: '16px 18px',
             fontFamily: 'inherit', fontSize: 28, fontWeight: 700, color: INK,
@@ -2554,7 +2556,7 @@ function BirthYearSheet({ value, onSave, onClose }) {
         {/* Live age preview */}
         <div style={{
           minHeight: 22, marginTop: 10, fontSize: 13, lineHeight: 1.4,
-          color: underAge ? DANGER : (canSave ? GREEN_DARK : INK_4),
+          color: underAge ? DANGER : (canSave ? PRIMARY_DARK : INK_4),
           fontWeight: 600, textAlign: 'center',
         }}>
           {!isComplete && 'Enter your 4-digit birth year.'}
@@ -2686,7 +2688,7 @@ function StreaksScreen({ state, navigate }) {
             background: 'radial-gradient(circle, rgba(232,83,14,0.5) 0%, transparent 70%)',
             pointerEvents: 'none',
           }} />
-          <ProgressRing size={104} stroke={7} progress={ringProgress} color={GREEN} trackColor="#2a2a2a">
+          <ProgressRing size={104} stroke={7} progress={ringProgress} color={PRIMARY} trackColor="#2a2a2a">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 32, fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: -1 }}>{state.streak}</div>
               <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: 1.4, color: '#bbb', textTransform: 'uppercase', marginTop: 3 }}>Day Streak</div>
@@ -2720,17 +2722,17 @@ function StreaksScreen({ state, navigate }) {
             }}>
               <div style={{
                 fontSize: 10, fontWeight: 700, letterSpacing: 0.8,
-                color: d.today ? GREEN : INK_4,
+                color: d.today ? PRIMARY : INK_4,
               }}>{d.day}</div>
               <div style={{
                 width: 28, height: 28, borderRadius: '50%',
-                background: d.answered ? GREEN : '#fff',
-                border: `2px solid ${d.answered ? GREEN : (d.today ? GREEN : '#e3e3e3')}`,
+                background: d.answered ? PRIMARY : '#fff',
+                border: `2px solid ${d.answered ? PRIMARY : (d.today ? PRIMARY : '#e3e3e3')}`,
                 color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 800, fontSize: 13,
               }}>
-                {d.answered ? <I.check /> : (d.today ? <span style={{ color: GREEN, fontSize: 9, letterSpacing: 0.6 }}>NOW</span> : null)}
+                {d.answered ? <I.check /> : (d.today ? <span style={{ color: PRIMARY, fontSize: 9, letterSpacing: 0.6 }}>NOW</span> : null)}
               </div>
             </div>
           ))}
@@ -2750,7 +2752,7 @@ function StreaksScreen({ state, navigate }) {
           }}>
             <div style={{
               width: 44, height: 44, borderRadius: '50%',
-              background: b.unlocked ? GREEN : '#e3e3e3',
+              background: b.unlocked ? PRIMARY : '#e3e3e3',
               color: '#fff', fontWeight: 800,
               fontSize: 17,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2777,7 +2779,7 @@ function StreaksScreen({ state, navigate }) {
             </div>
             {b.progress !== undefined && !b.unlocked && (
               <div style={{ width: '100%', height: 4, background: '#eee', borderRadius: 2, overflow: 'hidden', marginTop: 2 }}>
-                <div style={{ width: `${b.progress * 100}%`, height: '100%', background: GREEN }} />
+                <div style={{ width: `${b.progress * 100}%`, height: '100%', background: PRIMARY }} />
               </div>
             )}
             {b.badge && (
@@ -2802,7 +2804,7 @@ function PointsStamp({ points }) {
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'baseline', gap: 4,
-      background: GREEN, color: '#fff',
+      background: PRIMARY, color: '#fff',
       padding: '6px 12px',
       borderRadius: 999,
       fontWeight: 800,
@@ -2850,7 +2852,7 @@ function OnboardingScreen({ navigate, onPickFirst }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
               width: 30, height: 30, borderRadius: 10,
-              background: GREEN, color: '#fff', fontWeight: 900,
+              background: PRIMARY, color: '#fff', fontWeight: 900,
               fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
               letterSpacing: -0.5,
             }}>L</div>
@@ -2867,7 +2869,7 @@ function OnboardingScreen({ navigate, onPickFirst }) {
         }}>
           Answer a question.<br/>
           Share your voice.<br/>
-          <span style={{ color: GREEN }}>Earn cash &amp; rewards.</span>
+          <span style={{ color: PRIMARY }}>Earn cash &amp; rewards.</span>
         </div>
         <div style={{ fontSize: 14, color: INK_3, marginTop: 10, lineHeight: 1.55 }}>
           About 15 seconds. Type or talk. No signup to start — we'll ask if you want to save your earnings after.
@@ -2942,7 +2944,7 @@ function StackCard({ q, depth, exiting }) {
         height: '100%',
         boxSizing: 'border-box',
         display: 'flex', flexDirection: 'column',
-        boxShadow: depth === 0 ? '0 12px 36px rgba(26,42,32,0.06)' : 'none',
+        boxShadow: depth === 0 ? '0 12px 36px rgba(28,27,25,0.06)' : 'none',
       }}>
         <div style={{
           display: 'flex', alignItems: 'flex-start',
