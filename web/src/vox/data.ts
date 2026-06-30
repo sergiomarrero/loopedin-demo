@@ -399,3 +399,117 @@ export const SIGNALS: Signal[] = [
   { code: 'R-2792', type: 'fraud_spam', severity: 'medium', rationale: 'repeated-token / low-entropy answer', session: 'ELL stories', text: 'test test test test', status: 'new' },
   { code: 'R-2773', type: 'fraud_spam', severity: 'medium', rationale: 'gibberish / keyboard-mash', session: 'Small contractors', text: 'aaaaa', status: 'new' },
 ];
+
+// A few of the questions currently live in the member feed, attributed to their
+// real buyer orgs, with illustrative responses — so the top filter can slice the
+// dashboard by question and by organization across a richer set than the 5 seed
+// sessions above. (Internal RBL1 view shows real org names; the org view's
+// suppression still applies to all demographic cells.)
+export const MEMBER_QUESTIONS: Session[] = [
+  {
+    id: 'q-medicaid', title: 'If you could change one thing about renewing Medicaid, what would it be?',
+    prompt: 'Renewing Medicaid coverage.', vertical: 'Health / Benefits', orgLabel: 'Kaiser Family Foundation',
+    mode: 'voice', target: 80, collected: 31,
+    themes: [
+      { label: 'Renewal churn drops eligible people.', summary: 'Annual re-verification and missed mail cause coverage gaps for people who still qualify.', weightPct: 54, answerCount: 17, sentiment: -0.6,
+        quotes: [
+          { code: 'R-3110', text: 'They mailed the renewal to my old address. I found out I was dropped at the pharmacy counter.', attrs: ['Detroit, MI', 'Caregiver', 'Medicaid'] },
+          { code: 'R-3107', text: 'Make it automatic if nothing changed. I send the same pay stubs every single year.', attrs: ['< $30k', 'Parent of 2'] },
+        ], demographics: { Caregiver: 9, Medicaid: 17 } },
+      { label: 'Prove-you’re-poor paperwork.', summary: 'Respondents resent re-documenting unchanged circumstances under deadline pressure.', weightPct: 46, answerCount: 14, sentiment: -0.5,
+        quotes: [
+          { code: 'R-3101', text: 'Every year I have to prove I’m still poor enough. Miss one letter and my kid loses coverage.', attrs: ['< $20k', 'Single parent'] },
+        ], demographics: { '< $20k': 8 } },
+    ],
+    sentiment: { positive: 2, neutral: 5, negative: 17, avgIntensity: 0.58 },
+    demographics: { Caregiver: 9, Medicaid: 17, '< $30k': 11, '< $20k': 8, 'Parent of 2': 5, 'Single parent': 4, 'Detroit, MI': 6, 'Cleveland, OH': 5, 'Spanish-speaking': 3, 'Senior': 2 },
+    health: { fillRate: 0.39, voiceShare: 0.61, timeToFillDays: 9, dropOff: 0.14 },
+    trends: [ { period: 'Wk 1', count: 8, avgSentiment: -0.5 }, { period: 'Wk 2', count: 9, avgSentiment: -0.6 }, { period: 'Wk 3', count: 8, avgSentiment: -0.5 }, { period: 'Wk 4', count: 6, avgSentiment: -0.4 } ],
+  },
+  {
+    id: 'q-caregiver-week', title: 'Caregivers — what’s the hardest part of your week?',
+    prompt: 'The hardest part of a caregiver’s week.', vertical: 'Health / Caregiving', orgLabel: 'AARP',
+    mode: 'text', target: 60, collected: 24,
+    themes: [
+      { label: 'Isolation and lost income.', summary: 'Caregivers describe loneliness and cut hours as the twin costs that compound each other.', weightPct: 58, answerCount: 14, sentiment: -0.5,
+        quotes: [
+          { code: 'R-3210', text: 'The loneliness. I love her but I haven’t had a real conversation with another adult in days.', attrs: ['Atlanta, GA', 'Caregiver'] },
+          { code: 'R-3204', text: 'Money. I cut my hours to care for him and now we’re both broke.', attrs: ['< $30k', 'Lost income'] },
+        ], demographics: { Caregiver: 14, 'Lost income': 5 } },
+      { label: 'Nobody coordinates the care.', summary: 'Respondents act as the only link between siloed doctors, pharmacies and agencies.', weightPct: 42, answerCount: 10, sentiment: -0.3,
+        quotes: [
+          { code: 'R-3201', text: 'Coordinating eight doctors who never talk to each other. I’m the only one who sees the whole picture.', attrs: ['Newark, NJ', 'Caregiver'] },
+        ], demographics: { Caregiver: 10 } },
+    ],
+    sentiment: { positive: 2, neutral: 6, negative: 16, avgIntensity: 0.55 },
+    demographics: { Caregiver: 24, '< $30k': 9, '$40–60k': 5, 'Lost income': 5, 'Senior': 4, 'Youth caregiver': 1, 'Atlanta, GA': 5, 'Newark, NJ': 5, 'Detroit, MI': 4, 'Fresno, CA': 3 },
+    health: { fillRate: 0.4, voiceShare: 0, timeToFillDays: 7, dropOff: 0.1 },
+    trends: [ { period: 'Wk 1', count: 6, avgSentiment: -0.4 }, { period: 'Wk 2', count: 7, avgSentiment: -0.5 }, { period: 'Wk 3', count: 6, avgSentiment: -0.4 }, { period: 'Wk 4', count: 5, avgSentiment: -0.3 } ],
+  },
+  {
+    id: 'q-reentry', title: 'After getting out, what was the hardest thing about finding housing?',
+    prompt: 'Finding housing after incarceration.', vertical: 'Justice / Housing', orgLabel: 'Vera Institute of Justice',
+    mode: 'voice', target: 50, collected: 19,
+    themes: [
+      { label: 'The box ends the application.', summary: 'A single “have you been convicted” checkbox stops landlords from reading further.', weightPct: 55, answerCount: 11, sentiment: -0.65,
+        quotes: [
+          { code: 'R-3310', text: 'Every application asks the box. One yes and they stop reading.', attrs: ['Cleveland, OH', 'Justice-involved'] },
+          { code: 'R-3306', text: 'Halfway house for 90 days, then you’re on your own with a record and no rental history.', attrs: ['Reentry'] },
+        ], demographics: { 'Justice-involved': 11, Reentry: 6 } },
+      { label: 'No rental history, no door.', summary: 'Years inside erase the credit and tenancy record landlords screen for.', weightPct: 45, answerCount: 8, sentiment: -0.4,
+        quotes: [
+          { code: 'R-3301', text: 'My sister co-signed or I’d have been on the street the day I got out.', attrs: ['Atlanta, GA', 'Justice-involved'] },
+        ], demographics: { 'Justice-involved': 8 } },
+    ],
+    sentiment: { positive: 1, neutral: 4, negative: 14, avgIntensity: 0.66 },
+    demographics: { 'Justice-involved': 19, Reentry: 6, '< $20k': 9, '< $30k': 6, 'No rental history': 4, 'Cleveland, OH': 5, 'Atlanta, GA': 4, 'Detroit, MI': 4, 'Newark, NJ': 3, 'Veteran': 2 },
+    health: { fillRate: 0.38, voiceShare: 1, timeToFillDays: 13, dropOff: 0.2 },
+    trends: [ { period: 'Wk 1', count: 5, avgSentiment: -0.6 }, { period: 'Wk 2', count: 5, avgSentiment: -0.6 }, { period: 'Wk 3', count: 5, avgSentiment: -0.5 }, { period: 'Wk 4', count: 4, avgSentiment: -0.4 } ],
+  },
+  {
+    id: 'q-snap', title: 'What’s one thing that made applying for SNAP harder than it had to be?',
+    prompt: 'Applying for SNAP.', vertical: 'Benefits', orgLabel: 'Pew Charitable Trusts',
+    mode: 'voice', target: 70, collected: 27,
+    themes: [
+      { label: 'Paperwork and a phone interview at the worst time.', summary: 'Long forms and an interview scheduled during work hours pushed people out before approval.', weightPct: 60, answerCount: 16, sentiment: -0.5,
+        quotes: [
+          { code: 'R-3410', text: 'Forty pages and a two-hour phone interview they schedule during work hours.', attrs: ['Fresno, CA', '< $30k'] },
+          { code: 'R-3405', text: 'They asked for documents I’d already uploaded twice.', attrs: ['Detroit, MI', 'Parent'] },
+        ], demographics: { '< $30k': 12, Parent: 7 } },
+      { label: 'The website fought back.', summary: 'Sessions timed out mid-application, forcing people to restart from scratch.', weightPct: 40, answerCount: 11, sentiment: -0.4,
+        quotes: [
+          { code: 'R-3401', text: 'The website logged me out every time and I had to start over.', attrs: ['Cleveland, OH', 'Single parent'] },
+        ], demographics: { 'Single parent': 5 } },
+    ],
+    sentiment: { positive: 1, neutral: 7, negative: 19, avgIntensity: 0.52 },
+    demographics: { '< $30k': 14, '< $20k': 7, Parent: 9, 'Single parent': 5, 'Spanish-speaking': 4, 'No car': 3, 'Detroit, MI': 6, 'Cleveland, OH': 5, 'Fresno, CA': 5, 'Newark, NJ': 4 },
+    health: { fillRate: 0.39, voiceShare: 1, timeToFillDays: 8, dropOff: 0.16 },
+    trends: [ { period: 'Wk 1', count: 7, avgSentiment: -0.5 }, { period: 'Wk 2', count: 8, avgSentiment: -0.5 }, { period: 'Wk 3', count: 7, avgSentiment: -0.4 }, { period: 'Wk 4', count: 5, avgSentiment: -0.4 } ],
+  },
+  {
+    id: 'q-background', title: 'Have you ever been turned down for a job because of a background check?',
+    prompt: 'Background checks and hiring.', vertical: 'Justice / Employment', orgLabel: 'UCLA Justice Lab',
+    mode: 'voice', target: 50, collected: 22,
+    themes: [
+      { label: 'An old record, a permanent no.', summary: 'Years-old charges resurface in screening and end offers that were already verbal.', weightPct: 62, answerCount: 14, sentiment: -0.6,
+        quotes: [
+          { code: 'R-3510', text: 'I had the offer. Then the background check came back and the recruiter ghosted me.', attrs: ['Newark, NJ', 'Justice-involved'] },
+          { code: 'R-3504', text: 'It was a charge from when I was nineteen. I’m forty-one now.', attrs: ['Atlanta, GA', 'Justice-involved'] },
+        ], demographics: { 'Justice-involved': 14 } },
+      { label: 'No chance to explain.', summary: 'Respondents wanted a way to give context before an automated screen disqualified them.', weightPct: 38, answerCount: 8, sentiment: -0.45,
+        quotes: [
+          { code: 'R-3501', text: 'Nobody ever asked what happened. The form just said “does not meet requirements.”', attrs: ['Fresno, CA'] },
+        ], demographics: { 'Justice-involved': 8 } },
+    ],
+    sentiment: { positive: 2, neutral: 5, negative: 15, avgIntensity: 0.6 },
+    demographics: { 'Justice-involved': 22, '< $30k': 10, '< $20k': 6, Reentry: 5, Veteran: 2, 'Newark, NJ': 5, 'Atlanta, GA': 5, 'Fresno, CA': 4, 'Detroit, MI': 4, 'Cleveland, OH': 4 },
+    health: { fillRate: 0.44, voiceShare: 1, timeToFillDays: 11, dropOff: 0.18 },
+    trends: [ { period: 'Wk 1', count: 6, avgSentiment: -0.6 }, { period: 'Wk 2', count: 6, avgSentiment: -0.6 }, { period: 'Wk 3', count: 6, avgSentiment: -0.5 }, { period: 'Wk 4', count: 4, avgSentiment: -0.5 } ],
+  },
+];
+
+// Every filterable question = the 5 seed sessions + the member-feed samples.
+export const QUESTIONS: Session[] = [...SESSIONS, ...MEMBER_QUESTIONS];
+
+// Distinct organizations across all questions (for the top filter).
+export const ORGS: string[] = Array.from(new Set(QUESTIONS.map((q) => q.orgLabel)));
