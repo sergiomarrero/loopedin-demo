@@ -223,8 +223,13 @@ function IOSDevice({
         position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
         width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
       }} />
-      {/* status bar (absolute) */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+      {/* status bar (absolute) — opaque/blurred so scrolled content doesn't show through behind it */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+        background: dark ? 'rgba(0,0,0,0.6)' : 'rgba(250,250,246,0.82)',
+        backdropFilter: 'saturate(180%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+      }}>
         <IOSStatusBar dark={dark} />
       </div>
       {/* nav + content */}
@@ -1181,10 +1186,10 @@ function FeedScreen({ state, navigate, openAnswer }) {
         </div>
       </div>
 
-      {/* Tab segmented control */}
+      {/* Tab segmented control — sticks just below the status bar, not behind it */}
       <div style={{
         display: 'flex', gap: 8, padding: '18px 18px 14px',
-        position: 'sticky', top: 0, zIndex: 4,
+        position: 'sticky', top: 62, zIndex: 4,
         background: SURFACE_WARM,
       }}>
         <SegTab active={tab === 'foryou'} onClick={() => setTab('foryou')}
