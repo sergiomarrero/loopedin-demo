@@ -219,6 +219,11 @@ button:focus-visible, a:focus-visible, .chip-toggle:focus-visible, .nav button:f
   .fb-summary { margin-left: 0; }
 }
 
+/* ── Empty state (filter matched zero questions) ─────────────────────────── */
+.empty-state { text-align: center; padding: 40px 24px; }
+.empty-state h3 { margin: 0 0 8px; font-size: 17px; color: var(--txt); }
+.empty-state p { max-width: 440px; margin: 0 auto 16px; font-size: 14px; line-height: 1.55; }
+
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 .card {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-card); padding: 18px;
