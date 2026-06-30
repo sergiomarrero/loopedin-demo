@@ -109,6 +109,11 @@ function App() {
 
   const visibleNav = isOrg ? NAV.filter((n) => !n.internalOnly) : NAV; // org view hides Admin entirely
   const activeNav = NAV.find((n) => n.key === surface) ?? NAV[0];
+  // A filter combination can match zero questions (e.g. a voice-only topic with
+  // Format = Text, or a question that isn't in the selected org). Show a clear
+  // empty state instead of blank surfaces. Admin is exempt — the urgent-signal
+  // queue isn't sliced by the question filter.
+  const noResults = !isCross && surface !== 'admin' && activeQuestions.length === 0;
 
   function clearFilters() { setOrgSel([]); setQSel([]); setVertSel([]); setModeSel([]); }
   function switchView(v: View) {
@@ -213,12 +218,22 @@ function App() {
             </div>
           )}
 
-          {surface === 'themes' && <Themes themes={slice.themes} scopeTitle={slice.title} crossOrg={isCross} />}
-          {surface === 'sentiment' && <SentimentView s={slice.sentiment} themes={slice.themes} />}
-          {surface === 'demographics' && <Demographics view={view} counts={slice.demographics} />}
-          {surface === 'health' && <Health rows={activeQuestions} />}
-          {surface === 'trends' && <Trends trends={slice.trends} crossOrg={isCross} isOrg={isOrg} />}
-          {surface === 'admin' && !isOrg && <Signals signals={signals} onReview={reviewSignal} />}
+          {noResults ? (
+            <div className="card empty-state">
+              <h3>No questions match this filter.</h3>
+              <p className="muted">Nothing matches the current organization, topic and format combination. Try removing a filter.</p>
+              <button type="button" className="btn ghost" onClick={clearFilters}>Clear all filters</button>
+            </div>
+          ) : (
+            <>
+              {surface === 'themes' && <Themes themes={slice.themes} scopeTitle={slice.title} crossOrg={isCross} />}
+              {surface === 'sentiment' && <SentimentView s={slice.sentiment} themes={slice.themes} />}
+              {surface === 'demographics' && <Demographics view={view} counts={slice.demographics} />}
+              {surface === 'health' && <Health rows={activeQuestions} />}
+              {surface === 'trends' && <Trends trends={slice.trends} crossOrg={isCross} isOrg={isOrg} />}
+              {surface === 'admin' && !isOrg && <Signals signals={signals} onReview={reviewSignal} />}
+            </>
+          )}
         </main>
       </div>
       <footer className="foot">LoopedIn Vox · synthetic demo data · synthesis de-identifies every answer before a model sees it.</footer>
@@ -486,18 +501,23 @@ function Demographics({ view, counts }: { view: View; counts: Record<string, num
     <div className="card">
       <div className="card-head"><h3>Who is answering</h3>{view === 'org' && suppressed > 0 && <span className="muted" style={{ fontSize: 12 }}>· {suppressed} cells suppressed for privacy</span>}</div>
       <div className="cells">
-        {cells.map((c) => c.suppressed ? (
-          <div className="cell suppressed" key={c.key}>
-            <span className="lab">{c.label}</span>
-            <span className="suppressed-tag" style={{ gridColumn: '2 / span 2' }}><span className="lock" /> suppressed</span>
-          </div>
-        ) : (
-          <div className="cell" key={c.key}>
-            <span className="lab">{c.label}</span>
-            <div className="bar"><span style={{ width: pct(c.count / max) }} /></div>
-            <span className="ct">{c.count}</span>
-          </div>
-        ))}
+        {cells.map((c) => {
+          // Suppressed cells carry no `count` — the `in` guard narrows the union
+          // (the `suppressed` boolean isn't treated as the discriminant here).
+          if (!('count' in c)) return (
+            <div className="cell suppressed" key={c.key}>
+              <span className="lab">{c.label}</span>
+              <span className="suppressed-tag" style={{ gridColumn: '2 / span 2' }}><span className="lock" /> suppressed</span>
+            </div>
+          );
+          return (
+            <div className="cell" key={c.key}>
+              <span className="lab">{c.label}</span>
+              <div className="bar"><span style={{ width: pct(c.count / max) }} /></div>
+              <span className="ct">{c.count}</span>
+            </div>
+          );
+        })}
       </div>
       {view === 'internal' && <p className="muted" style={{ fontSize: 13, marginTop: 14 }}>Internal RBL1 view — raw cells, including thin ones. Race/ethnicity appears only in aggregate output that clears the floor and is never a targeting filter.</p>}
     </div>
