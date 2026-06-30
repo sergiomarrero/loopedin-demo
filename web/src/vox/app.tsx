@@ -5,10 +5,24 @@
 // through the §6 suppression mirror, and urgent signals / cross-org are
 // unreachable from the org view (brief §2/§5.4/§6).
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SESSIONS, CROSS_ORG, SIGNALS, LAST_SYNTHESIZED, QUESTIONS, ORGS, type Theme, type Sentiment, type TrendPoint, type Signal, type Session } from './data';
 import { cellsFromCounts, type View, type EnforcedCell } from './lib/suppression';
+import { queryQuestions, VERTICALS, type Opt } from './lib/source';
+
+// Recent / pinned questions persist across reloads (feature #4). Key follows the
+// loopedin-*-v1 convention; SSR/private-mode safe (all access is try/caught).
+const LS_KEY = 'loopedin-vox-v1';
+type Persisted = { recents: string[]; pinned: string[] };
+function loadPersisted(): Persisted {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
+    if (raw) { const p = JSON.parse(raw); return { recents: Array.isArray(p.recents) ? p.recents : [], pinned: Array.isArray(p.pinned) ? p.pinned : [] }; }
+  } catch { /* ignore */ }
+  return { recents: [], pinned: [] };
+}
+function savePersisted(p: Persisted) { try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch { /* ignore */ } }
 
 // 'admin' is the urgent-signal review queue — internal RBL1 only, moved to #6.
 type Surface = 'themes' | 'sentiment' | 'demographics' | 'health' | 'trends' | 'admin';
@@ -26,7 +40,6 @@ const ORG_VIEW_ORG = SESSIONS[0].orgLabel; // 'Health Research Org'
 
 function pct(n: number) { return `${Math.round(n * 100)}%`; }
 function sentimentLabel(s: number) { return s > 0.15 ? 'Positive' : s < -0.15 ? 'Negative' : 'Mixed'; }
-function trunc(s: string, n: number) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
 // ── Slicing: fold a set of questions into one view (themes/sentiment/…). The
 // filter bar drives WHICH questions; this turns them into the surfaces' data. ──
@@ -57,32 +70,51 @@ function aggregate(qs: Session[], title: string): Slice {
 function App() {
   const [view, setView] = useState<View>('internal');
   const [surface, setSurface] = useState<Surface>('themes');
-  const [orgFilter, setOrgFilter] = useState<string>('all'); // 'all' | orgLabel
-  const [qFilter, setQFilter] = useState<string>('all');     // 'all' | question id
+  // Multi-select filter state (empty array = "all"). Replaces the old single
+  // <select>s so the bar scales to hundreds of orgs / thousands of questions.
+  const [orgSel, setOrgSel] = useState<string[]>([]);   // org labels
+  const [qSel, setQSel] = useState<string[]>([]);       // question ids
+  const [vertSel, setVertSel] = useState<string[]>([]); // topics (Session.vertical)
+  const [modeSel, setModeSel] = useState<string[]>([]); // 'voice' | 'text'
+  const [persist, setPersist] = useState<Persisted>(loadPersisted); // recents + pinned
   const [signals, setSignals] = useState<Signal[]>(SIGNALS);
   const [syncing, setSyncing] = useState(false);
   const [synced, setSynced] = useState(LAST_SYNTHESIZED);
 
   const isOrg = view === 'org';
-  // Org view is locked to one organization; internal can pick any org (or all).
-  const org = isOrg ? ORG_VIEW_ORG : orgFilter;
-  const orgQuestions = useMemo(() => (org === 'all' ? QUESTIONS : QUESTIONS.filter((x) => x.orgLabel === org)), [org]);
-  const activeQuestions = useMemo(() => (qFilter === 'all' ? orgQuestions : QUESTIONS.filter((x) => x.id === qFilter)), [qFilter, orgQuestions]);
+  // Org view is locked to its own organization; internal can pick any combination.
+  const effOrgs = isOrg ? [ORG_VIEW_ORG] : orgSel;
 
-  // The pre-authored cross-org synthesis is the internal "everything" view;
-  // any narrower filter re-slices the questions live.
-  const isCross = !isOrg && org === 'all' && qFilter === 'all';
+  // Cascade: the question list is whatever matches the org / topic / format
+  // facets (not the question selection itself). queryQuestions() is the
+  // data-source seam — local now, a /api/vox/questions fetch when a backend
+  // exists — so this scales without shipping every question to the browser.
+  const candidates = useMemo(
+    () => queryQuestions({ orgs: effOrgs, verticals: vertSel, modes: modeSel }),
+    [isOrg, orgSel, vertSel, modeSel],
+  );
+  const activeQuestions = useMemo(
+    () => (qSel.length ? candidates.filter((x) => qSel.includes(x.id)) : candidates),
+    [candidates, qSel],
+  );
+
+  const anyFilter = effOrgs.length > 0 || qSel.length > 0 || vertSel.length > 0 || modeSel.length > 0;
+  // The pre-authored cross-org synthesis is the internal "everything" view; any
+  // narrower filter re-slices the matching questions live.
+  const isCross = !isOrg && !anyFilter;
+  const scopeTitle = effOrgs.length === 1 ? effOrgs[0] : anyFilter ? 'Filtered selection' : 'All organizations';
   const slice: Slice = isCross
     ? { title: 'All organizations', themes: CROSS_ORG.themes, sentiment: CROSS_ORG.sentiment, trends: CROSS_ORG.trends, demographics: sumDemographics(QUESTIONS) }
-    : aggregate(activeQuestions, org === 'all' ? 'All organizations' : org);
+    : aggregate(activeQuestions, scopeTitle);
 
   const visibleNav = isOrg ? NAV.filter((n) => !n.internalOnly) : NAV; // org view hides Admin entirely
   const activeNav = NAV.find((n) => n.key === surface) ?? NAV[0];
 
+  function clearFilters() { setOrgSel([]); setQSel([]); setVertSel([]); setModeSel([]); }
   function switchView(v: View) {
     setView(v);
     if (v === 'org') {
-      setOrgFilter('all'); setQFilter('all');
+      clearFilters();
       if (NAV.find((n) => n.key === surface)?.internalOnly) setSurface('themes'); // bounce off Admin
     }
   }
@@ -93,12 +125,30 @@ function App() {
   function reviewSignal(code: string, status: 'reviewed' | 'dismissed') {
     setSignals((cur) => cur.map((s) => (s.code === code ? { ...s, status } : s)));
   }
+  // Selecting a question records it as "recent"; pin is a manual toggle. Both
+  // persist to localStorage so they survive reloads (feature #4).
+  function pushRecent(id: string) {
+    setPersist((p) => { const next = { ...p, recents: [id, ...p.recents.filter((x) => x !== id)].slice(0, 6) }; savePersisted(next); return next; });
+  }
+  function togglePin(id: string) {
+    setPersist((p) => { const next = { ...p, pinned: p.pinned.includes(id) ? p.pinned.filter((x) => x !== id) : [id, ...p.pinned] }; savePersisted(next); return next; });
+  }
+  function chooseQuestions(next: string[]) {
+    const added = next.filter((x) => !qSel.includes(x));
+    if (added.length) pushRecent(added[added.length - 1]);
+    setQSel(next);
+  }
 
-  const summary = qFilter !== 'all'
-    ? `1 question · ${slice.themes.length} themes`
-    : isCross
-      ? `${QUESTIONS.length} questions · cross-org synthesis`
-      : `${orgQuestions.length} question${orgQuestions.length === 1 ? '' : 's'}${org === 'all' ? '' : ` · ${org}`}`;
+  const qn = activeQuestions.length;
+  const summaryParts = [`${qn} question${qn === 1 ? '' : 's'}`];
+  if (isCross) summaryParts.push('cross-org synthesis');
+  else {
+    if (effOrgs.length === 1) summaryParts.push(effOrgs[0]);
+    else if (effOrgs.length > 1) summaryParts.push(`${effOrgs.length} organizations`);
+    if (vertSel.length) summaryParts.push(`${vertSel.length} topic${vertSel.length === 1 ? '' : 's'}`);
+    if (modeSel.length === 1) summaryParts.push(modeSel[0] === 'voice' ? 'voice' : 'text');
+  }
+  const summary = summaryParts.join(' · ');
 
   return (
     <div className="app">
@@ -132,12 +182,22 @@ function App() {
         <main className="main">
           <FilterBar
             isOrg={isOrg}
-            org={org}
-            setOrg={(o) => { setOrgFilter(o); setQFilter('all'); }}
-            q={qFilter}
-            setQ={setQFilter}
-            orgs={isOrg ? [ORG_VIEW_ORG] : ORGS}
-            questions={orgQuestions}
+            orgs={ORGS}
+            orgSel={effOrgs}
+            setOrgSel={setOrgSel}
+            questions={candidates}
+            qSel={qSel}
+            setQSel={chooseQuestions}
+            verticals={VERTICALS}
+            vertSel={vertSel}
+            setVertSel={setVertSel}
+            modeSel={modeSel}
+            setModeSel={setModeSel}
+            recents={persist.recents}
+            pinned={persist.pinned}
+            onTogglePin={togglePin}
+            anyFilter={anyFilter}
+            onClear={clearFilters}
             summary={summary}
           />
 
@@ -166,25 +226,153 @@ function App() {
   );
 }
 
-function FilterBar({ isOrg, org, setOrg, q, setQ, orgs, questions, summary }: { isOrg: boolean; org: string; setOrg: (o: string) => void; q: string; setQ: (q: string) => void; orgs: string[]; questions: Session[]; summary: string }) {
+function FilterBar(props: {
+  isOrg: boolean;
+  orgs: string[]; orgSel: string[]; setOrgSel: (v: string[]) => void;
+  questions: Session[]; qSel: string[]; setQSel: (v: string[]) => void;
+  verticals: string[]; vertSel: string[]; setVertSel: (v: string[]) => void;
+  modeSel: string[]; setModeSel: (v: string[]) => void;
+  recents: string[]; pinned: string[]; onTogglePin: (id: string) => void;
+  anyFilter: boolean; onClear: () => void; summary: string;
+}) {
+  const { isOrg } = props;
+  const orgOptions: Opt[] = props.orgs.map((o) => ({ value: o, label: o }));
+  const qOptions: Opt[] = props.questions.map((q) => ({ value: q.id, label: q.title, sub: q.orgLabel }));
+  const vertOptions: Opt[] = props.verticals.map((v) => ({ value: v, label: v }));
+  const toggleMode = (m: string) => props.setModeSel(props.modeSel.includes(m) ? props.modeSel.filter((x) => x !== m) : [...props.modeSel, m]);
   return (
     <div className="filterbar">
       <span className="fb-title">Filter</span>
+      <Combo label="Organization" placeholder={isOrg ? props.orgSel[0] : 'All organizations'} multi
+        options={orgOptions} selected={props.orgSel} onChange={props.setOrgSel} disabled={isOrg} />
+      <Combo label="Question" placeholder="All questions" multi
+        options={qOptions} selected={props.qSel} onChange={props.setQSel}
+        recents={props.recents} pinned={props.pinned} onTogglePin={props.onTogglePin} />
+      <Combo label="Topic" placeholder="All topics" multi
+        options={vertOptions} selected={props.vertSel} onChange={props.setVertSel} />
       <label className="fb-field">
-        <span>Organization</span>
-        <select value={org} onChange={(e) => setOrg(e.target.value)} disabled={isOrg} aria-label="Filter by organization">
-          {!isOrg && <option value="all">All organizations</option>}
-          {orgs.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        <span>Format</span>
+        <div className="fb-chips">
+          {(['voice', 'text'] as const).map((m) => (
+            <button type="button" key={m} className={`chip-toggle${props.modeSel.includes(m) ? ' on' : ''}`}
+              onClick={() => toggleMode(m)} aria-pressed={props.modeSel.includes(m)}>{m === 'voice' ? 'Voice' : 'Text'}</button>
+          ))}
+        </div>
       </label>
-      <label className="fb-field">
-        <span>Question</span>
-        <select value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter by question">
-          <option value="all">All questions</option>
-          {questions.map((x) => <option key={x.id} value={x.id}>{trunc(x.title, 64)}</option>)}
-        </select>
-      </label>
-      <span className="fb-summary">{summary}</span>
+      {!isOrg && props.anyFilter && <button type="button" className="fb-clear" onClick={props.onClear}>Clear all</button>}
+      <span className="fb-summary">{props.summary}</span>
+    </div>
+  );
+}
+
+// Searchable, optionally multi-select combobox. Replaces native <select> so the
+// filter stays usable past a handful of options: type-ahead, keyboard nav,
+// grouped Pinned / Recent / All, and (for questions) a per-row pin toggle.
+function Combo({ label, placeholder, options, selected, onChange, multi = false, disabled = false, recents, pinned, onTogglePin }: {
+  label: string; placeholder: string; options: Opt[]; selected: string[];
+  onChange: (next: string[]) => void; multi?: boolean; disabled?: boolean;
+  recents?: string[]; pinned?: string[]; onTogglePin?: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [hi, setHi] = useState(0);
+  // Pinned/Recent grouping is snapshotted when the popover opens so selecting an
+  // item doesn't reorder the list under the cursor mid-interaction.
+  const [frz, setFrz] = useState<{ p: string[]; r: string[] }>({ p: [], r: [] });
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setFrz({ p: pinned ?? [], r: recents ?? [] });
+    const onDoc = (e: MouseEvent) => { if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const byVal = useMemo(() => new Map(options.map((o) => [o.value, o] as const)), [options]);
+  const q = search.trim().toLowerCase();
+  const pinnedIds = pinned ?? []; // live — drives the per-row Pin/Pinned label
+
+  // When not searching, group Pinned → Recent → All; otherwise a flat match list.
+  const groups: { title?: string; items: Opt[] }[] = useMemo(() => {
+    if (q) return [{ items: options.filter((o) => o.label.toLowerCase().includes(q) || (o.sub ?? '').toLowerCase().includes(q)) }];
+    const pin = frz.p.map((v) => byVal.get(v)).filter(Boolean) as Opt[];
+    const rec = frz.r.filter((v) => !frz.p.includes(v)).map((v) => byVal.get(v)).filter(Boolean) as Opt[];
+    const rest = options.filter((o) => !frz.p.includes(o.value) && !frz.r.includes(o.value));
+    const out: { title?: string; items: Opt[] }[] = [];
+    if (pin.length) out.push({ title: 'Pinned', items: pin });
+    if (rec.length) out.push({ title: 'Recent', items: rec });
+    out.push({ title: pin.length || rec.length ? 'All' : undefined, items: rest });
+    return out;
+  }, [q, options, byVal, frz]);
+  const flat = groups.flatMap((g) => g.items);
+
+  const choose = (value: string) => {
+    if (multi) onChange(selected.includes(value) ? selected.filter((x) => x !== value) : [...selected, value]);
+    else { onChange([value]); setOpen(false); setSearch(''); }
+  };
+
+  const triggerText = selected.length === 0
+    ? placeholder
+    : multi && selected.length > 1
+      ? `${selected.length} selected`
+      : (byVal.get(selected[0])?.label ?? placeholder);
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, flat.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (flat[hi]) choose(flat[hi].value); }
+    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); }
+  };
+
+  let idx = -1;
+  return (
+    <div className="fb-field combo" ref={rootRef}>
+      <span>{label}</span>
+      <div className={`combo-trigger${selected.length ? ' has' : ''}`} role="button" tabIndex={disabled ? -1 : 0}
+        aria-haspopup="listbox" aria-expanded={open} aria-disabled={disabled} aria-label={`Filter by ${label.toLowerCase()}`}
+        onClick={() => { if (!disabled) setOpen((o) => !o); }}
+        onKeyDown={(e) => { if (disabled) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((o) => !o); } else if (e.key === 'ArrowDown') { setOpen(true); } }}>
+        <span className="combo-val">{triggerText}</span>
+        {selected.length > 0 && !disabled
+          ? <button type="button" className="combo-clear" aria-label={`Clear ${label}`} onClick={(e) => { e.stopPropagation(); onChange([]); }}>×</button>
+          : <span className="combo-caret" aria-hidden>▾</span>}
+      </div>
+      {open && !disabled && (
+        <div className="combo-pop" role="listbox" aria-label={label}>
+          <input className="combo-search" autoFocus placeholder={`Search ${label.toLowerCase()}…`}
+            value={search} onChange={(e) => { setSearch(e.target.value); setHi(0); }} onKeyDown={onKey} />
+          <div className="combo-list">
+            {flat.length === 0 && <div className="combo-empty">No matches</div>}
+            {groups.map((g, gi) => (
+              <div key={gi}>
+                {g.title && <div className="combo-grouptitle">{g.title}</div>}
+                {g.items.map((o) => {
+                  idx += 1; const i = idx; const on = selected.includes(o.value);
+                  return (
+                    <div key={o.value} role="option" aria-selected={on}
+                      className={`combo-opt${on ? ' on' : ''}${i === hi ? ' hi' : ''}`}
+                      onMouseEnter={() => setHi(i)} onMouseDown={(e) => { e.preventDefault(); choose(o.value); }}>
+                      {multi && <span className="combo-check" aria-hidden>{on ? '✓' : ''}</span>}
+                      <span className="combo-optlabel"><span className="combo-opttext">{o.label}</span>{o.sub && <span className="combo-optsub">{o.sub}</span>}</span>
+                      {onTogglePin && (
+                        <span className={`combo-pin${pinnedIds.includes(o.value) ? ' on' : ''}`} role="button"
+                          aria-label={pinnedIds.includes(o.value) ? 'Unpin' : 'Pin'}
+                          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(o.value); }}>
+                          {pinnedIds.includes(o.value) ? 'Pinned' : 'Pin'}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          {multi && selected.length > 0 && (
+            <div className="combo-foot"><button type="button" className="combo-clearall" onMouseDown={(e) => { e.preventDefault(); onChange([]); }}>Clear {selected.length} selected</button></div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
