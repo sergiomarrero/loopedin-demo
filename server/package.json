@@ -10,6 +10,8 @@
     "seed:vox": "tsx src/vox/seed-vox.ts",
     "db:push": "prisma db push",
     "db:reset": "prisma db push --force-reset && tsx src/seed.ts",
+    "generate:pg": "prisma generate --schema prisma/schema.postgres.prisma",
+    "db:push:pg": "prisma db push --schema prisma/schema.postgres.prisma",
     "postinstall": "prisma generate"
   },
   "dependencies": {

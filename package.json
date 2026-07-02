@@ -2,7 +2,7 @@
   "name": "loopedin",
   "private": true,
   "version": "0.1.0",
-  "description": "LoopedIn — paid community research. Members answer questions for cash & rewards; organizations ask their community and hear back, anonymized.",
+  "description": "LoopedIn \u2014 paid community research. Members answer questions for cash & rewards; organizations ask their community and hear back, anonymized.",
   "workspaces": [
     "web",
     "server"
@@ -15,6 +15,7 @@
     "build": "npm --workspace web run build",
     "start": "npm --workspace server run start",
     "deploy:build": "npm install && npm --workspace web run build && npm --workspace server run db:push && npm --workspace server run seed",
+    "deploy:build:supabase": "npm install && npm --workspace web run build && npm --workspace server run generate:pg && npm --workspace server run db:push:pg && npm --workspace server run seed",
     "seed": "npm --workspace server run seed",
     "db:push": "npm --workspace server run db:push",
     "db:reset": "npm --workspace server run db:reset"

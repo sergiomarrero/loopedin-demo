@@ -1,0 +1,167 @@
+// LoopedIn data model — PostgreSQL (Supabase) variant of schema.prisma.
+// KEEP THE MODELS IN SYNC with schema.prisma (sqlite, local dev). Production
+// runs against Supabase Postgres via DATABASE_URL; see docs/supabase-backend.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A respondent ("member"). Identified by email + phone (anonymous, no password).
+model Member {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?
+  cents        Int      @default(0) // wallet balance, in cents (shown as points, 1c = 1pt)
+  pendingCents Int      @default(0) // earned-but-unclaimed escrow
+  streak       Int      @default(7)
+  profile      String   @default("{}") // JSON blob mirroring the profile schema
+  qualifiedFor String   @default("{}") // JSON map of lived-experience tags confirmed
+  createdAt    DateTime @default(now())
+
+  answers Answer[]
+}
+
+// A buyer organization. Identified by email + phone (matches the free-plan flow).
+model Org {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  name       String   @default("Your organization")
+  phone      String?
+  plan       String   @default("free") // free | pro | enterprise
+  balancePts Int      @default(4500)
+  autocharge String   @default("{\"on\":false,\"threshold\":50,\"topup\":100}")
+  createdAt  DateTime @default(now())
+
+  questions Question[]
+}
+
+// A question. Carries both member-feed economics (cents reward) and org-campaign
+// economics (points * target). `feed` set => visible in the member feed.
+model Question {
+  id        String   @id @default(cuid())
+  orgId     String?
+  org       Org?     @relation(fields: [orgId], references: [id])
+  text      String
+  mode      String   @default("text") // text | voice
+
+  // member-feed economics
+  cents     Int      @default(0)
+  feed      String? // foryou | browse | null
+  buyer     String?
+  buyerType String?
+  trial     Boolean  @default(false)
+  qualifier String? // JSON { tag, label } or null
+
+  // org-campaign economics
+  points     Int     @default(0) // points per response
+  target     Int     @default(0)
+  collected  Int     @default(0)
+  status     String  @default("live") // draft | pending | live | closed | rejected
+  city       String?
+  income     String?
+  startLabel String?
+  endLabel   String?
+
+  seed      Boolean  @default(false) // seeded sample data
+  createdAt DateTime @default(now())
+
+  answers Answer[]
+}
+
+// A member's answer to a question (an org "response"). Always anonymized when
+// surfaced to orgs — coded id + profile attrs only, never the member's identity.
+model Answer {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  memberId   String
+  member     Member   @relation(fields: [memberId], references: [id])
+  text       String?
+  mode       String   @default("text")
+  cents      Int      @default(0)
+  attrs      String   @default("[]") // JSON array of anonymized profile attrs
+  flagged    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([questionId, memberId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LoopedIn Vox — derived/cache tables (ADDITIVE).
+//
+// Vox is the live-insights layer on top of LoopedIn. It ONLY READS the entities
+// above (Member/Org/Question/Answer) and writes only the four tables below.
+// These reference existing rows by plain id string (no Prisma relation fields),
+// so the models above are intentionally left untouched — Vox cannot interfere
+// with LoopedIn's data. See server/src/vox/* and CLAUDE.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// A synthesized cluster of answers (the core Vox output). scope is the level the
+// cluster was computed at; scopeRefId points at the questionId/orgId (null for
+// cross_org). Cross-org themes are internal-RBL1-only — never served to an org.
+model Theme {
+  id                    String   @id @default(cuid())
+  scope                 String   // question | org | cross_org
+  scopeRefId            String? // questionId | orgId | null (cross_org)
+  label                 String
+  summary               String
+  weightPct             Int      @default(0) // share of answers in this theme, 0-100
+  representativeQuoteIds String  @default("[]") // JSON array of coded ids e.g. ["R-2841"]
+  answerCount           Int      @default(0)
+  sentimentScore        Float    @default(0) // -1..1
+  demographics          String   @default("{}") // JSON aggregate breakdown per theme
+  synthesisRunId        String?
+  createdAt             DateTime @default(now())
+
+  @@index([scope, scopeRefId])
+}
+
+// One execution of the synthesis pipeline. Lets the UI show "last synthesized N
+// hours ago" and which model produced a set of themes.
+model SynthesisRun {
+  id            String    @id @default(cuid())
+  scope         String    // question | org | cross_org
+  scopeRefId    String?
+  trigger       String    @default("scheduled") // scheduled | on_demand
+  model         String    @default("") // synthesis model id used
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  answerCountIn Int       @default(0)
+  status        String    @default("running") // running | complete | failed
+
+  @@index([scope, scopeRefId])
+}
+
+// An answer that tripped the urgent-signal classifier. Internal-RBL1-only; never
+// surfaced in the org view (parent brief §5.4). Dashboard-flag only this build.
+model UrgentSignal {
+  id         String    @id @default(cuid())
+  answerId   String    @unique
+  type       String    // safety_crisis | fraud_spam
+  severity   String    @default("medium") // low | medium | high
+  rationale  String    @default("")
+  status     String    @default("new") // new | reviewed | dismissed
+  detectedAt DateTime  @default(now())
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  @@index([status])
+}
+
+// Per-answer derived data, cached so models don't re-run. transcript holds voice
+// text (mock = the text answer); embedding is the clustering vector as JSON.
+model AnswerEnrichment {
+  id                String   @id @default(cuid())
+  answerId          String   @unique
+  sentimentScore    Float    @default(0) // -1..1
+  emotionalIntensity Float   @default(0) // 0..1
+  transcript        String? // voice transcript (mock = text)
+  embedding         String   @default("[]") // JSON number[] clustering vector
+  flaggedTypes      String   @default("[]") // JSON array: ["safety_crisis"] etc.
+  createdAt         DateTime @default(now())
+}

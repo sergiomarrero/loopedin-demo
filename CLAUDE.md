@@ -69,9 +69,14 @@ These are product/legal requirements from the brief, not stylistic preferences:
 ## Current deployment state (June 2026)
 - **Live:** `https://www.weloopedin.com` via **Vercel** — `/` landing, **`/member`**, **`/researcher`** (clean URLs via `vercel.json`; `/orgs.html` & `/member.html` 301 → clean paths).
 - ⚠️ **The Vercel deploy is FRONTEND-ONLY** (static `web/dist`, demo/offline mode: seed
-  data + `localStorage`). The Express/Prisma backend is **not hosted there**. For a real
-  full-stack deploy use the **Render** blueprint (`render.yaml`) — API serves the frontend
-  same-origin so `/api` works. For scale, switch Prisma SQLite → PostgreSQL.
+  data + `localStorage`). The Express/Prisma backend is **not hosted there** — and must
+  stay disconnected from the database (deliberate; see `docs/supabase-backend.md`). For a
+  real full-stack deploy use the **Render** blueprint (`render.yaml`) — API serves the
+  frontend same-origin so `/api` works. The production database is **Supabase Postgres**
+  (project `loopedin`, ref `sygeaxmjmkwedwkvoopb`) — schema'd, seeded, RLS-locked; the
+  server targets it via `server/prisma/schema.postgres.prisma` (keep in sync with the
+  sqlite dev schema). The researcher console now lives at **loopedin.rbl1.com** (repo
+  `loopedin-research`); `/researcher` here redirects there.
 - **Password gate:** whole site is gated by `middleware.ts` via the **`SITE_PASSWORD`**
   env var (set in Vercel). If the env var is unset, the gate is OFF (won't brick prod).
 - **Security headers** live in `vercel.json` (HSTS, nosniff, X-Frame-Options, Referrer-Policy, Permissions-Policy, CSP — CSP tested at 0 violations; keep `style-src 'unsafe-inline'` for the apps' inline styles).
