@@ -643,34 +643,38 @@ const STREAK_HISTORY = [
 
 // ===== source: 4eafac61 =====
 // Pulse shared UI atoms.
-// PALETTE — built for trust + warmth + low-income community readability.
-//   Primary: deep money-green (#2E7D5F). Universally trusted color for $.
-//   Accent : warm orange (#F2994A) — used only for streak/celebration moments.
-//   Surface: warm cream (#FAFAF6) so the app reads friendly, not corporate-white.
-//   Ink    : warm near-black (#1A2A20), warm-mid (#5A6B62), warm-light (#8A9991).
-//   No blue (medical-tech feel), no neon, no gradients. Big type, generous spacing.
+// PALETTE — Rebel One design system: orange (#E8530E) is the ONLY accent.
+//   The member app was originally built on money-green primary + a second warm
+//   orange accent; that violates the brief's load-bearing "one accent" rule, so
+//   the whole app now runs on the single brand orange. The GREEN_* / ACCENT_*
+//   constant NAMES are kept (they're referenced throughout) but all now resolve
+//   to the one orange family — think of GREEN_* as "primary/accent".
+//   Surface: warm off-white so the app still reads friendly, not corporate-white.
+//   Ink    : neutral near-blacks (no green cast). DANGER stays a functional red.
+//   No second accent, no neon, no gradients. Big type, generous spacing.
 // Icons: minimal outline glyphs only where mobile UX requires them (tab bar, mic, back).
 
-const GREEN        = '#2E7D5F';
-const GREEN_DARK   = '#1F5B43';
-const GREEN_TINT   = '#E8F2EC';
-const GREEN_TINT_2 = '#D2E5DA';
-const GREEN_BORDER = '#B5D9C7';
-const ACCENT       = '#F2994A';
-const ACCENT_DARK  = '#D87A2E';
-const ACCENT_TINT  = '#FFF1E0';
-const ACCENT_BORDER= '#F5C9A0';
-const INK          = '#1A2A20';
-const INK_2        = '#34433A';
-const INK_3        = '#5A6B62';
-const INK_4        = '#8A9991';
-const INK_5        = '#B5C0BA';
+// Single brand accent (primary). Names retained for the many call sites.
+const GREEN        = '#E8530E'; // brand orange — primary accent
+const GREEN_DARK   = '#D14A0B'; // orange hover / pressed
+const GREEN_TINT   = '#FFF1E8'; // orange tint (pill / soft fill)
+const GREEN_TINT_2 = '#FFE4D2'; // deeper orange tint
+const GREEN_BORDER = '#F7C8A8'; // orange border
+const ACCENT       = '#E8530E'; // collapsed into the one accent (was a 2nd orange)
+const ACCENT_DARK  = '#D14A0B';
+const ACCENT_TINT  = '#FFF1E8';
+const ACCENT_BORDER= '#F7C8A8';
+const INK          = '#111111'; // neutral inks — no green cast
+const INK_2        = '#333333';
+const INK_3        = '#555555';
+const INK_4        = '#777777';
+const INK_5        = '#BBBBBB';
 const SURFACE      = '#FFFFFF';
-const SURFACE_WARM = '#FAFAF6';
-const SURFACE_TINT = '#F2F1EA';
-const BORDER       = '#E4E2DA';
-const BORDER_2     = '#D4D1C5';
-const DANGER       = '#B23B2E';
+const SURFACE_WARM = '#FAFAF8'; // near-neutral warm off-white
+const SURFACE_TINT = '#F4F3F0';
+const BORDER       = '#E6E4DE';
+const BORDER_2     = '#D6D3CB';
+const DANGER       = '#B23B2E'; // functional error state (not a brand accent)
 const DANGER_TINT  = '#FBEAE7';
 
 // ---------- Eyebrow chip (small uppercase tag) ----------
