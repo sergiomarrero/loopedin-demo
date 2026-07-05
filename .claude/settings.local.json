@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Supabase",
+      "mcp__8d2cbaf4-00f5-40ed-b4c6-7443de55ad53"
+    ]
+  }
+}
