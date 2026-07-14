@@ -2597,10 +2597,12 @@ function SectionTitle({ children }) {
 function ProfileScreen({ state, navigate, onUpdate }) {
   const p = state.profile;
   const completion = computeCompletion(p);
-  const [addressOpen, setAddressOpen] = React.useState(false);
-  const [yearOpen, setYearOpen] = React.useState(false);
-  const [notesOpen, setNotesOpen] = React.useState(false);
   const [showAllTags, setShowAllTags] = React.useState(false);
+  // The input sheets (birth year / address / notes) render at the APP level
+  // (via onUpdate({openSheet})) — like the option picker — so they stack above
+  // the tab bar. On iOS, -webkit-overflow-scrolling on the screen wrapper
+  // creates a stacking context, so nothing rendered inside a screen can ever
+  // paint over the tab bar, no matter its z-index.
   // Document verification (demo): pick a photo/PDF on-device to verify a tag.
   // Nothing is uploaded — there's no review backend yet — but it marks the tag
   // Verified locally so the flow is fully demoable.
@@ -2690,7 +2692,7 @@ function ProfileScreen({ state, navigate, onUpdate }) {
           label="Birth year"
           value={p.birthYear || "Add"}
           dim={!p.birthYear}
-          onClick={() => setYearOpen(true)}
+          onClick={() => onUpdate({ openSheet: 'year' })}
         />
         <ProfileRow
           label="Income bracket"
@@ -2702,7 +2704,7 @@ function ProfileScreen({ state, navigate, onUpdate }) {
           label="Address"
           value={addressDisplay || "Add"}
           dim={!addressDisplay}
-          onClick={() => setAddressOpen(true)}
+          onClick={() => onUpdate({ openSheet: 'address' })}
         />
         <ProfileRow
           label="Family status"
@@ -2866,7 +2868,7 @@ function ProfileScreen({ state, navigate, onUpdate }) {
           label="Anything else"
           value={notesDisplay || "Add a note"}
           dim={!notesDisplay}
-          onClick={() => setNotesOpen(true)}
+          onClick={() => onUpdate({ openSheet: 'notes' })}
         />
         <ProfileRow
           label="Email"
@@ -2892,39 +2894,6 @@ function ProfileScreen({ state, navigate, onUpdate }) {
         Made by <RBL1Mark size={11} /> · For builders + their communities.
       </div>
 
-      {addressOpen && (
-        <AddressSheet
-          value={p.address}
-          onSave={(addr) => {
-            // Store full address AND surface zip at the top level for filtering.
-            onUpdate({ profile: { ...p, address: addr, zip: addr.zip } });
-            setAddressOpen(false);
-          }}
-          onClose={() => setAddressOpen(false)}
-        />
-      )}
-      {yearOpen && (
-        <BirthYearSheet
-          value={p.birthYear}
-          onSave={(y) => {
-            // Age-derived tags are automatic, not hand-tapped: keep the
-            // "Senior (65+)" tag in sync with the entered birth year.
-            const age = new Date().getFullYear() - y;
-            const tags = (p.tags || []).filter(x => x !== 'senior');
-            if (age >= 65) tags.push('senior');
-            onUpdate({ profile: { ...p, birthYear: y, tags } });
-            setYearOpen(false);
-          }}
-          onClose={() => setYearOpen(false)}
-        />
-      )}
-      {notesOpen && (
-        <NotesSheet
-          value={p.notes}
-          onSave={(t) => { onUpdate({ profile: { ...p, notes: t } }); setNotesOpen(false); }}
-          onClose={() => setNotesOpen(false)}
-        />
-      )}
     </div>
   );
 }
@@ -3006,28 +2975,71 @@ function isProfileQualified(state) {
 }
 
 // Generic option picker sheet — single (radio) or multi-select.
-// Keyboard-aware bottom sheets. When the soft keyboard opens, the visual
-// viewport shrinks but our fixed 100dvh app does not, so a bottom-anchored
-// sheet's action buttons hide behind the keyboard. Track the keyboard height
-// via the VisualViewport API so the sheet can lift itself above it.
+// Keyboard-aware sheets. When the soft keyboard opens, the visual viewport
+// shrinks but our fixed 100dvh app does not — a bottom-anchored sheet's inputs
+// and buttons hide behind the keyboard. Track the visual viewport box so
+// sheets can reposition themselves.
 function useKeyboardInset() {
-  const [inset, setInset] = React.useState(0);
+  const [box, setBox] = React.useState({ kb: 0, top: 0, height: 0 });
   React.useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const update = () => setInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    const update = () => setBox({
+      kb: Math.max(0, window.innerHeight - vv.height - vv.offsetTop),
+      top: vv.offsetTop,
+      height: vv.height,
+    });
     update();
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
     return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update); };
   }, []);
-  return inset;
+  return box;
+}
+
+// Shared sheet scaffold: dim overlay + white panel + grab handle.
+// Bottom-anchored normally. While the keyboard is open, the panel pins to the
+// TOP of the visual viewport instead — iOS Safari scrolls/shrinks the visible
+// area unpredictably around a fixed-position layout, and top-pinning is the
+// only placement that guarantees the input AND the action buttons stay
+// visible above the keyboard.
+function SheetOverlay({ onClose, children }) {
+  const { kb, top, height } = useKeyboardInset();
+  const kbOpen = kb > 60;
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 60,
+      background: 'rgba(17,17,17,0.4)',
+      display: 'flex', alignItems: kbOpen ? 'flex-start' : 'flex-end',
+      animation: 'fade-in .2s ease',
+      paddingBottom: kbOpen ? 0 : kb,
+      transition: 'padding-bottom .2s ease',
+    }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: '#fff',
+        borderRadius: kbOpen ? '0 0 20px 20px' : '20px 20px 0 0',
+        width: '100%',
+        padding: '20px 20px 24px',
+        animation: 'sheet-in .25s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        marginTop: kbOpen ? top : 0,
+        maxHeight: kbOpen ? Math.max(220, height - 12) : '82%',
+        overflowY: 'auto',
+        display: 'flex', flexDirection: 'column',
+        boxSizing: 'border-box',
+      }}>
+        <div style={{
+          width: 40, height: 4, background: '#e3e3e3', borderRadius: 2,
+          margin: '0 auto 14px', flexShrink: 0,
+        }} />
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function PickerSheet({ title, options, value, onPick, onClose, multi = false }) {
   // Track multi-select state locally so we don't re-render the whole app on every tap.
   const [draft, setDraft] = React.useState(() => Array.isArray(value) ? value : (value ? [value] : []));
-  const kb = useKeyboardInset();
   const isSelected = (opt) => multi ? draft.includes(opt) : value === opt;
   const toggle = (opt) => {
     if (multi) {
@@ -3037,31 +3049,10 @@ function PickerSheet({ title, options, value, onPick, onClose, multi = false }) 
     }
   };
   return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 60,
-      background: 'rgba(17,17,17,0.4)',
-      display: 'flex', alignItems: 'flex-end',
-      animation: 'fade-in .2s ease',
-      // Lift the sheet above the soft keyboard so its input + buttons stay visible.
-      paddingBottom: kb, transition: 'padding-bottom .2s ease',
-    }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        background: '#fff',
-        borderTopLeftRadius: 20, borderTopRightRadius: 20,
-        width: '100%',
-        padding: '20px 20px 24px',
-        animation: 'sheet-in .25s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        maxHeight: '82%',
-        display: 'flex', flexDirection: 'column',
-        boxSizing: 'border-box',
-      }}>
-        <div style={{
-          width: 40, height: 4, background: '#e3e3e3', borderRadius: 2,
-          margin: '0 auto 14px',
-        }} />
+    <SheetOverlay onClose={onClose}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 14, gap: 12,
+          marginBottom: 14, gap: 12, flexShrink: 0,
         }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: INK, letterSpacing: -0.3 }}>{title}</div>
           {multi && (
@@ -3108,8 +3099,7 @@ function PickerSheet({ title, options, value, onPick, onClose, multi = false }) 
             </PButton>
           </div>
         )}
-      </div>
-    </div>
+    </SheetOverlay>
   );
 }
 
@@ -3119,7 +3109,6 @@ function AddressSheet({ value, onSave, onClose }) {
   const [a, setA] = React.useState(init);
   const zipOk = /^\d{5}$/.test(a.zip);
   const canSave = zipOk && a.street.trim() && a.city.trim() && a.state.trim();
-  const kb = useKeyboardInset();
 
   const field = (key, label, props = {}) => (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -3139,28 +3128,8 @@ function AddressSheet({ value, onSave, onClose }) {
   );
 
   return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 60,
-      background: 'rgba(17,17,17,0.4)',
-      display: 'flex', alignItems: 'flex-end',
-      animation: 'fade-in .2s ease',
-      // Lift the sheet above the soft keyboard so its input + buttons stay visible.
-      paddingBottom: kb, transition: 'padding-bottom .2s ease',
-    }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        background: '#fff',
-        borderTopLeftRadius: 20, borderTopRightRadius: 20,
-        width: '100%',
-        padding: '20px 20px 28px',
-        animation: 'sheet-in .25s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        maxHeight: `calc(100% - ${kb}px - 12px)`, overflowY: 'auto',
-        boxSizing: 'border-box',
-      }}>
-        <div style={{
-          width: 40, height: 4, background: '#e3e3e3', borderRadius: 2,
-          margin: '0 auto 14px',
-        }} />
-        <div style={{ fontSize: 18, fontWeight: 800, color: INK, letterSpacing: -0.3 }}>Your address</div>
+    <SheetOverlay onClose={onClose}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: INK, letterSpacing: -0.3, flexShrink: 0 }}>Your address</div>
         <div style={{ fontSize: 12, color: INK_4, marginTop: 4, lineHeight: 1.5 }}>
           Only your ZIP is shared with buyers — used to match you to questions in your region.
         </div>
@@ -3188,8 +3157,7 @@ function AddressSheet({ value, onSave, onClose }) {
             Save address
           </PButton>
         </div>
-      </div>
-    </div>
+    </SheetOverlay>
   );
 }
 
@@ -3204,31 +3172,10 @@ function BirthYearSheet({ value, onSave, onClose }) {
   const age = isComplete && inRange ? currentYear - parsed : null;
   const underAge = age !== null && age < 18;
   const canSave = isComplete && inRange && !underAge;
-  const kb = useKeyboardInset();
 
   return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 60,
-      background: 'rgba(17,17,17,0.4)',
-      display: 'flex', alignItems: 'flex-end',
-      animation: 'fade-in .2s ease',
-      // Lift the sheet above the soft keyboard so its input + buttons stay visible.
-      paddingBottom: kb, transition: 'padding-bottom .2s ease',
-    }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        background: '#fff',
-        borderTopLeftRadius: 20, borderTopRightRadius: 20,
-        width: '100%',
-        padding: '20px 20px 24px',
-        animation: 'sheet-in .25s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        maxHeight: `calc(100% - ${kb}px - 12px)`, overflowY: 'auto',
-        boxSizing: 'border-box',
-      }}>
-        <div style={{
-          width: 40, height: 4, background: '#e3e3e3', borderRadius: 2,
-          margin: '0 auto 14px',
-        }} />
-        <div style={{ fontSize: 18, fontWeight: 800, color: INK, letterSpacing: -0.3 }}>Birth year</div>
+    <SheetOverlay onClose={onClose}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: INK, letterSpacing: -0.3, flexShrink: 0 }}>Birth year</div>
         <div style={{ fontSize: 12, color: INK_4, marginTop: 4, lineHeight: 1.5, marginBottom: 16 }}>
           We share your age range with buyers, not your exact birth year. You must be 18+ to use LoopedIn.
         </div>
@@ -3290,38 +3237,16 @@ function BirthYearSheet({ value, onSave, onClose }) {
             Save
           </PButton>
         </div>
-      </div>
-    </div>
+    </SheetOverlay>
   );
 }
 
 // Freeform notes sheet — anything else the user wants buyers to know.
 function NotesSheet({ value, onSave, onClose }) {
   const [text, setText] = React.useState(value || '');
-  const kb = useKeyboardInset();
   return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 60,
-      background: 'rgba(17,17,17,0.4)',
-      display: 'flex', alignItems: 'flex-end',
-      animation: 'fade-in .2s ease',
-      // Lift the sheet above the soft keyboard so its input + buttons stay visible.
-      paddingBottom: kb, transition: 'padding-bottom .2s ease',
-    }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        background: '#fff',
-        borderTopLeftRadius: 20, borderTopRightRadius: 20,
-        width: '100%',
-        padding: '20px 20px 24px',
-        animation: 'sheet-in .25s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        maxHeight: `calc(100% - ${kb}px - 12px)`, overflowY: 'auto',
-        boxSizing: 'border-box',
-      }}>
-        <div style={{
-          width: 40, height: 4, background: '#e3e3e3', borderRadius: 2,
-          margin: '0 auto 14px',
-        }} />
-        <div style={{ fontSize: 18, fontWeight: 800, color: INK, letterSpacing: -0.3 }}>Anything else</div>
+    <SheetOverlay onClose={onClose}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: INK, letterSpacing: -0.3, flexShrink: 0 }}>Anything else</div>
         <div style={{ fontSize: 12, color: INK_4, marginTop: 4, lineHeight: 1.5, marginBottom: 14 }}>
           Optional. Anything about you that helps buyers ask better questions — your work, your community, something you care about.
         </div>
@@ -3353,8 +3278,7 @@ function NotesSheet({ value, onSave, onClose }) {
             Save note
           </PButton>
         </div>
-      </div>
-    </div>
+    </SheetOverlay>
   );
 }
 
@@ -3831,6 +3755,7 @@ function PulseApp() {
 
   // Picker sheet (profile field picker)
   const [picker, setPicker] = React.useState(null); // { field, options, title } | null
+  const [sheet, setSheet] = React.useState(null);   // 'year' | 'address' | 'notes' | null
 
   React.useEffect(() => { saveState(state); }, [state]);
 
@@ -3919,6 +3844,10 @@ function PulseApp() {
   function updateProfile(patch) {
     if (patch.openPicker) {
       setPicker(patch.openPicker);
+      return;
+    }
+    if (patch.openSheet) {
+      setSheet(patch.openSheet);
       return;
     }
     setState(s => ({ ...s, ...patch }));
@@ -4088,6 +4017,45 @@ function PulseApp() {
                 setPicker(null);
               }}
               onClose={() => setPicker(null)}
+            />
+          )}
+          {/* Input sheets live here (siblings of the tab bar) — see ProfileScreen note. */}
+          {sheet === 'year' && (
+            <BirthYearSheet
+              value={state.profile.birthYear}
+              onSave={(y) => {
+                // Age-derived tags are automatic, not hand-tapped: keep the
+                // "Senior (65+)" tag in sync with the entered birth year.
+                const age = new Date().getFullYear() - y;
+                setState(s => {
+                  const tags = (s.profile.tags || []).filter(x => x !== 'senior');
+                  if (age >= 65) tags.push('senior');
+                  return { ...s, profile: { ...s.profile, birthYear: y, tags } };
+                });
+                setSheet(null);
+              }}
+              onClose={() => setSheet(null)}
+            />
+          )}
+          {sheet === 'address' && (
+            <AddressSheet
+              value={state.profile.address}
+              onSave={(addr) => {
+                // Store full address AND surface zip at the top level for filtering.
+                setState(s => ({ ...s, profile: { ...s.profile, address: addr, zip: addr.zip } }));
+                setSheet(null);
+              }}
+              onClose={() => setSheet(null)}
+            />
+          )}
+          {sheet === 'notes' && (
+            <NotesSheet
+              value={state.profile.notes}
+              onSave={(t) => {
+                setState(s => ({ ...s, profile: { ...s.profile, notes: t } }));
+                setSheet(null);
+              }}
+              onClose={() => setSheet(null)}
             />
           )}
         </div>
