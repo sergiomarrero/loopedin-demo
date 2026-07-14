@@ -231,13 +231,18 @@ function useIsRealPhone() {
 
 function IOSDevice({
   children, width = 402, height = 874, dark = false,
-  title, keyboard = false,
+  title, keyboard = false, activeScreen,
 }) {
   const fullBleed = useIsRealPhone();
   // Scroll-direction tracking for auto-hiding chrome (tab bar). Native
   // listener on the scroll container — passive, so it never blocks scrolling.
   const [chromeHidden, setChromeHidden] = React.useState(false);
   const scrollRef = React.useRef(null);
+  // Always reveal the tab bar when the screen changes: chromeHidden is shared
+  // across screens, so without this a hide from scrolling one (long) screen
+  // would persist onto the next — leaving a short, unscrollable screen with no
+  // way to bring the menu back.
+  React.useEffect(() => { setChromeHidden(false); }, [activeScreen]);
   React.useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -3472,7 +3477,7 @@ function PulseApp() {
 
   return (
     <React.Fragment>
-      <IOSDevice width={402} height={874}>
+      <IOSDevice width={402} height={874} activeScreen={state.screen}>
         <div style={{
           width: '100%',
           height: '100%',
