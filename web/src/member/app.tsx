@@ -1520,12 +1520,11 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mr = new MediaRecorder(stream);
+      const { mr, blobFromChunks } = makeAudioRecorder(stream);
       chunksRef.current = [];
       mr.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
-        setRecordedUrl(URL.createObjectURL(blob));
+        setRecordedUrl(URL.createObjectURL(blobFromChunks(chunksRef.current)));
         (streamRef.current?.getTracks() || []).forEach(t => t.stop());
         streamRef.current = null;
       };
@@ -1910,6 +1909,19 @@ function RecordButton({ state, onStart, onStop }) {
   );
 }
 
+// Pick a container the CURRENT browser can both record AND play back.
+// (iOS Safari records audio/mp4; labelling that blob audio/webm makes the
+// <audio> player show "Error".) Falls back to the recorder's own reported
+// mimeType, and only then to an untyped blob.
+function makeAudioRecorder(stream) {
+  const preferred = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+    .find(t => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+  const mr = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
+  const blobFromChunks = (chunks) =>
+    mr.mimeType ? new Blob(chunks, { type: mr.mimeType }) : new Blob(chunks);
+  return { mr, blobFromChunks };
+}
+
 
 
 
@@ -1959,10 +1971,11 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mr = new MediaRecorder(stream);
+      const { mr, blobFromChunks } = makeAudioRecorder(stream);
       chunksRef.current = [];
       mr.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunksRef.current.push(ev.data); };
       recorderRef.current = mr;
+      recorderRef.current.blobFromChunks = blobFromChunks;
       holdT0.current = Date.now();
       mr.start();
       setRecTime(0);
@@ -1983,8 +1996,7 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
         setRecHint('Hold the button while you talk, release when you’re done.');
         return;
       }
-      const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
-      setRecordedUrl(URL.createObjectURL(blob));
+      setRecordedUrl(URL.createObjectURL(mr.blobFromChunks(chunksRef.current)));
       setRecState('recorded');
     };
     mr.stop();
@@ -2042,12 +2054,14 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
     const on = reaction === label;
     return (
       <button key={label} onClick={() => setReaction(on ? null : label)} style={{
-        flex: '1 1 auto', minHeight: 52, padding: '12px 14px',
+        // Sized so a 3-chip set fits one row on a 390px phone — a wrapped chip
+        // stretching full-width reads as broken.
+        flex: '1 1 0', minWidth: 0, minHeight: 46, padding: '10px 8px',
         background: on ? PRIMARY : 'rgba(255,255,255,0.10)',
         color: '#fff', border: `1.5px solid ${on ? PRIMARY : 'rgba(255,255,255,0.28)'}`,
-        borderRadius: 999, fontFamily: 'inherit', fontWeight: 700, fontSize: 14,
-        letterSpacing: -0.1, cursor: 'pointer', transition: 'background .2s, border-color .2s',
-        whiteSpace: 'nowrap',
+        borderRadius: 999, fontFamily: 'inherit', fontWeight: 700, fontSize: 13,
+        letterSpacing: -0.2, cursor: 'pointer', transition: 'background .2s, border-color .2s',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>{label}</button>
     );
   };
@@ -2147,8 +2161,8 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
           Paid by <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>{q.buyer}</span> · anonymous · swipe up to skip
         </div>
 
-        {/* Reaction chips */}
-        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        {/* Reaction chips — one even row */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           {reactions.map(chip)}
         </div>
 
