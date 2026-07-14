@@ -290,7 +290,10 @@ function IOSDevice({
       <div style={{
         height: '100%', display: 'flex', flexDirection: 'column',
         paddingTop: fullBleed ? 'env(safe-area-inset-top)' : 0,
-        paddingBottom: fullBleed ? 'env(safe-area-inset-bottom)' : 0,
+        // Bottom inset is intentionally NOT reserved here: each bottom element
+        // (answer submit bar, tab bar) pads its own safe area, so reserving it
+        // again would leave a device-coloured gray strip below the footer.
+        paddingBottom: 0,
         boxSizing: 'border-box',
       }}>
         {title !== undefined && <IOSNavBar title={title} dark={dark} />}
@@ -1479,29 +1482,29 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
       transform: dragX ? `translateX(${dragX}px)` : 'translateX(0)',
       transition: dragX ? 'none' : 'transform .2s ease',
     }}>
-    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', flexDirection: 'column' }}>
-      <TopBar
-        background={SURFACE_WARM}
-        leading={<BackButton onClick={back} />}
-        trailing={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Eyebrow tone="gray">{q.buyerType}</Eyebrow>
-            <div style={{
-              display: 'inline-flex', alignItems: 'baseline', gap: 4,
-              background: PRIMARY, color: '#fff',
-              padding: '4px 9px', borderRadius: 999,
-              fontWeight: 800, fontSize: 14, letterSpacing: -0.4, lineHeight: 1,
-            }}>
-              {q.cents}
-              <span style={{
-                fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
-                opacity: 0.9, textTransform: 'uppercase',
-              }}>pts</span>
-            </div>
+    {/* Pinned header — sits ABOVE the scroll area so it never scrolls away. */}
+    <TopBar
+      background={SURFACE_WARM}
+      leading={<BackButton onClick={back} />}
+      trailing={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Eyebrow tone="gray">{q.buyerType}</Eyebrow>
+          <div style={{
+            display: 'inline-flex', alignItems: 'baseline', gap: 4,
+            background: PRIMARY, color: '#fff',
+            padding: '4px 9px', borderRadius: 999,
+            fontWeight: 800, fontSize: 14, letterSpacing: -0.4, lineHeight: 1,
+          }}>
+            {q.cents}
+            <span style={{
+              fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
+              opacity: 0.9, textTransform: 'uppercase',
+            }}>pts</span>
           </div>
-        }
-      />
-
+        </div>
+      }
+    />
+    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '8px 18px 24px' }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
           {q.trial && <Eyebrow tone="accent">Trial · paid by LoopedIn</Eyebrow>}
