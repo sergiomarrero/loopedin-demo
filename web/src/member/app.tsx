@@ -452,6 +452,43 @@ function dollarsFmt(c) {
 
 const PULSE_QUESTIONS = [
   // ---------- For You ----------
+  // Product reviews lead the feed: look at real media, react, then say why.
+  {
+    id: 'q-review-juice',
+    text: "Would you grab this at the store? Tell us why or why not.",
+    buyer: "Harvest Foods Co.",
+    buyerType: "BRAND",
+    mode: "voice",
+    cents: 100,
+    trial: false,
+    feed: 'foryou',
+    qualifier: null,
+    review: {
+      media: [
+        { type: 'video', src: '/review/juice-promo.mp4', webm: '/review/juice-promo.webm', alt: 'Harvest Sips promo video' },
+        { type: 'image', src: '/review/juice-front.svg', alt: 'Harvest Sips bottle, front' },
+        { type: 'image', src: '/review/juice-label.svg', alt: 'Nutrition label' },
+      ],
+      reactions: ["I'd buy it", "Not for me", "Too pricey"],
+    },
+  },
+  {
+    id: 'q-review-app',
+    text: "This is a new app for managing your benefits. What's confusing or missing?",
+    buyer: "Detroit Benefits Lab",
+    buyerType: "RESEARCH",
+    mode: "voice",
+    cents: 150,
+    trial: false,
+    feed: 'foryou',
+    qualifier: null,
+    review: {
+      media: [
+        { type: 'image', src: '/review/app-home.svg', alt: 'BenefitTrack app home screen' },
+      ],
+      reactions: ["Easy to use", "Confusing", "Missing something"],
+    },
+  },
   {
     id: 'q-snap',
     text: "What's one thing that made applying for SNAP harder than it had to be?",
@@ -1051,12 +1088,40 @@ function TabBar({ active, onChange, anonymous }) {
 // ---------- Question card ----------
 function QuestionCard({ q, onAnswer, showQualifier = false, locked = false }) {
   const isVoice = q.mode === 'voice';
+  // Review questions show their media as the card hero (first image; the full
+  // story/video experience opens on tap).
+  const thumb = q.review?.media?.find(m => m.type === 'image') || null;
   return (
     <PCard interactive={!locked} onClick={onAnswer} style={{
       padding: 18, position: 'relative',
       opacity: locked ? 0.55 : 1,
       cursor: locked ? 'pointer' : 'pointer',
     }}>
+      {thumb && (
+        <div style={{
+          margin: '-18px -18px 14px', position: 'relative',
+          borderRadius: '16px 16px 0 0', overflow: 'hidden',
+          height: 170, background: SURFACE_TINT,
+        }}>
+          <img src={thumb.src} alt={thumb.alt || ''} style={{
+            width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block',
+          }} />
+          <span style={{
+            position: 'absolute', top: 12, left: 12,
+            background: INK, color: '#fff', borderRadius: 999,
+            padding: '5px 11px', fontSize: 10, fontWeight: 800,
+            letterSpacing: 1, textTransform: 'uppercase',
+          }}>Product review</span>
+          {q.review.media.some(m => m.type === 'video') && (
+            <span style={{
+              position: 'absolute', bottom: 12, right: 12,
+              background: 'rgba(17,17,17,0.72)', color: '#fff', borderRadius: 999,
+              padding: '5px 11px', fontSize: 10, fontWeight: 800,
+              letterSpacing: 1, textTransform: 'uppercase',
+            }}>Video</span>
+          )}
+        </div>
+      )}
       {locked && (
         <div style={{
           position: 'absolute', top: 14, right: 14,
@@ -1108,6 +1173,20 @@ function PointsCelebration({ cents, onDone }) {
     const t = setTimeout(onDone, 1400);
     return () => clearTimeout(t);
   }, [onDone]);
+  // Count the points up (like-counter feel) instead of flashing the total.
+  const [shown, setShown] = React.useState(0);
+  React.useEffect(() => {
+    const dur = 550;
+    const t0 = performance.now();
+    let raf;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      setShown(Math.round(cents * (1 - Math.pow(1 - p, 3)))); // ease-out cubic
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [cents]);
   return (
     <div style={{
       position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 200,
@@ -1136,7 +1215,7 @@ function PointsCelebration({ cents, onDone }) {
         letterSpacing: -1.5,
         textShadow: '0 6px 24px rgba(232,83,14,0.25)',
         whiteSpace: 'nowrap',
-      }}>+{centsFmt(cents)}</div>
+      }}>+{centsFmt(shown)}</div>
     </div>
   );
 }
@@ -1828,6 +1907,331 @@ function RecordButton({ state, onStart, onStop }) {
           ? <div style={{ width: 28, height: 28, background: '#fff', borderRadius: 6 }} />
           : <I.mic style={{ width: 38, height: 38 }} />}
     </button>
+  );
+}
+
+
+
+
+// ===== Product review — full-screen story flow =====
+// The Instagram/TikTok grammar applied to research: media fills the screen
+// (segment bars for multi-image, muted autoplay for video), one tap on a
+// reaction chip, then say why — hold-to-talk voice note (WhatsApp-style) or a
+// short text. Swipe up to skip to the next question.
+function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
+  const q = findQuestion(qid);
+  const media = q?.review?.media || [];
+  const reactions = q?.review?.reactions || [];
+  const [idx, setIdx] = React.useState(0);
+  const [reaction, setReaction] = React.useState(null);
+  const [mode, setMode] = React.useState('voice'); // 'voice' | 'text'
+  const [text, setText] = React.useState('');
+  const [sound, setSound] = React.useState(false);
+  const videoRef = React.useRef(null);
+  // Kick autoplay explicitly: React sets `muted` as a property after mount,
+  // which some browsers don't count for the muted-autoplay allowance.
+  React.useEffect(() => {
+    const v = videoRef.current;
+    if (v) { v.muted = !sound; v.play().catch(() => {}); }
+  }, [idx, sound]);
+
+  // --- hold-to-talk recorder (press = record, release = done) ---
+  const [recState, setRecState] = React.useState('idle'); // idle|recording|recorded
+  const [recTime, setRecTime] = React.useState(0);
+  const [recordedUrl, setRecordedUrl] = React.useState(null);
+  const [recHint, setRecHint] = React.useState(null);
+  const recorderRef = React.useRef(null);
+  const chunksRef = React.useRef([]);
+  const streamRef = React.useRef(null);
+  const holdT0 = React.useRef(0);
+
+  React.useEffect(() => {
+    if (recState !== 'recording') return;
+    const t = setInterval(() => setRecTime(r => r + 1), 1000);
+    return () => clearInterval(t);
+  }, [recState]);
+
+  const holdStart = async (e) => {
+    if (recState === 'recorded') return;
+    e.preventDefault();
+    setRecHint(null);
+    if (recordedUrl) { URL.revokeObjectURL(recordedUrl); setRecordedUrl(null); }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunksRef.current.push(ev.data); };
+      recorderRef.current = mr;
+      holdT0.current = Date.now();
+      mr.start();
+      setRecTime(0);
+      setRecState('recording');
+    } catch {
+      setRecHint('We couldn’t reach your microphone — check the permission, or type instead.');
+    }
+  };
+  const holdEnd = () => {
+    const mr = recorderRef.current;
+    if (!mr || mr.state === 'inactive') return;
+    const heldMs = Date.now() - holdT0.current;
+    mr.onstop = () => {
+      (streamRef.current?.getTracks() || []).forEach(t => t.stop());
+      streamRef.current = null;
+      if (heldMs < 500) { // a tap, not a hold — teach the gesture
+        setRecState('idle'); setRecTime(0);
+        setRecHint('Hold the button while you talk, release when you’re done.');
+        return;
+      }
+      const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
+      setRecordedUrl(URL.createObjectURL(blob));
+      setRecState('recorded');
+    };
+    mr.stop();
+  };
+  const resetRec = () => {
+    if (recordedUrl) { URL.revokeObjectURL(recordedUrl); setRecordedUrl(null); }
+    setRecState('idle'); setRecTime(0); setRecHint(null);
+  };
+  React.useEffect(() => () => { // teardown on unmount
+    const mr = recorderRef.current;
+    if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} }
+    (streamRef.current?.getTracks() || []).forEach(t => t.stop());
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+  }, []);
+
+  // --- swipe up = skip to next question (only while viewing, not recording) ---
+  const swipe = React.useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    swipe.current = { x0: t.clientX, y0: t.clientY };
+  };
+  const onTouchEnd = (e) => {
+    const s = swipe.current; swipe.current = null;
+    if (!s || recState === 'recording') return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x0, dy = t.clientY - s.y0;
+    if (dy < -80 && Math.abs(dy) > Math.abs(dx) * 1.5) onSkipNext();
+    else if (dx > 90 && s.x0 <= 28) back(); // edge swipe-back
+  };
+
+  if (!q || media.length === 0) return <div style={{ padding: 80 }}>Question not found.</div>;
+  const m = media[idx];
+
+  // Tap left third = previous segment, elsewhere = next (IG stories).
+  const onMediaTap = (e) => {
+    if (media.length < 2) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const frac = (e.clientX - r.left) / r.width;
+    if (frac < 0.33) setIdx(i => Math.max(0, i - 1));
+    else setIdx(i => Math.min(media.length - 1, i + 1));
+  };
+
+  const canSubmit = !!reaction && (mode === 'text' ? text.trim().length >= 3 : recState === 'recorded');
+  const submit = () => {
+    if (!canSubmit) return;
+    onSubmit({
+      qid: q.id, cents: q.cents,
+      mode: mode === 'text' ? 'text' : 'voice',
+      text: mode === 'text' ? text.trim() : null,
+      reaction,
+    });
+  };
+
+  const chip = (label) => {
+    const on = reaction === label;
+    return (
+      <button key={label} onClick={() => setReaction(on ? null : label)} style={{
+        flex: '1 1 auto', minHeight: 52, padding: '12px 14px',
+        background: on ? PRIMARY : 'rgba(255,255,255,0.10)',
+        color: '#fff', border: `1.5px solid ${on ? PRIMARY : 'rgba(255,255,255,0.28)'}`,
+        borderRadius: 999, fontFamily: 'inherit', fontWeight: 700, fontSize: 14,
+        letterSpacing: -0.1, cursor: 'pointer', transition: 'background .2s, border-color .2s',
+        whiteSpace: 'nowrap',
+      }}>{label}</button>
+    );
+  };
+
+  return (
+    <div
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+      style={{
+        height: '100%', display: 'flex', flexDirection: 'column',
+        background: '#111', color: '#fff', position: 'relative',
+        userSelect: 'none', WebkitUserSelect: 'none',
+      }}>
+      {/* Top chrome: segment bars + back + points */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 6, padding: '10px 14px 0' }}>
+        {media.length > 1 && (
+          <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
+            {media.map((_, i) => (
+              <div key={i} style={{
+                flex: 1, height: 3, borderRadius: 2,
+                background: i <= idx ? '#fff' : 'rgba(255,255,255,0.3)',
+                transition: 'background .2s',
+              }} />
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button onClick={back} aria-label="Back" style={{
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'rgba(17,17,17,0.55)', color: '#fff', border: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', fontSize: 20,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              background: 'rgba(17,17,17,0.55)', color: '#fff', borderRadius: 999,
+              padding: '6px 11px', fontSize: 10, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase',
+            }}>{q.buyerType}</span>
+            <span style={{
+              display: 'inline-flex', alignItems: 'baseline', gap: 4,
+              background: PRIMARY, color: '#fff', padding: '6px 11px', borderRadius: 999,
+              fontWeight: 800, fontSize: 14, letterSpacing: -0.4, lineHeight: 1,
+            }}>
+              {q.cents}<span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.2, opacity: 0.9, textTransform: 'uppercase' }}>pts</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Media */}
+      <div onClick={onMediaTap} style={{ flex: 1, position: 'relative', minHeight: 0, background: '#111' }}>
+        {m.type === 'video' ? (
+          <video
+            key={m.src}
+            ref={videoRef}
+            autoPlay muted={!sound} loop playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          >
+            {/* mp4 (H.264) for Safari/iOS; WebM fallback for codec-free Chromium builds. */}
+            <source src={m.src} type="video/mp4" />
+            {m.webm && <source src={m.webm} type="video/webm" />}
+          </video>
+        ) : (
+          <img key={m.src} src={m.src} alt={m.alt || ''} draggable={false}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        )}
+        {m.type === 'video' && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setSound(s => !s); }}
+            style={{
+              position: 'absolute', bottom: 14, right: 14,
+              background: 'rgba(17,17,17,0.72)', color: '#fff', border: 0,
+              borderRadius: 999, padding: '8px 14px', fontSize: 11, fontWeight: 800,
+              letterSpacing: 0.8, textTransform: 'uppercase', cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}>{sound ? 'Sound on' : 'Tap for sound'}</button>
+        )}
+        {media.length > 1 && (
+          <div style={{
+            position: 'absolute', bottom: 14, left: 14,
+            background: 'rgba(17,17,17,0.55)', color: 'rgba(255,255,255,0.85)',
+            borderRadius: 999, padding: '6px 11px', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+          }}>{idx + 1} / {media.length} · tap to flip</div>
+        )}
+      </div>
+
+      {/* Bottom panel: question → react → say why */}
+      <div style={{
+        flexShrink: 0, padding: '16px 18px calc(16px + env(safe-area-inset-bottom))',
+        background: '#111', borderTop: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35, letterSpacing: -0.3, textWrap: 'pretty' }}>
+          {q.text}
+        </div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 6, lineHeight: 1.4 }}>
+          Paid by <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>{q.buyer}</span> · anonymous · swipe up to skip
+        </div>
+
+        {/* Reaction chips */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          {reactions.map(chip)}
+        </div>
+
+        {/* Composer appears once they've reacted */}
+        {reaction && (
+          <div style={{ marginTop: 14 }}>
+            {mode === 'voice' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                {recState !== 'recorded' ? (
+                  <React.Fragment>
+                    <button
+                      onPointerDown={holdStart}
+                      onPointerUp={holdEnd}
+                      onPointerLeave={holdEnd}
+                      onPointerCancel={holdEnd}
+                      onContextMenu={(e) => e.preventDefault()}
+                      style={{
+                        width: 84, height: 84, borderRadius: '50%',
+                        background: recState === 'recording' ? DANGER : PRIMARY,
+                        color: '#fff', border: 'none', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transform: recState === 'recording' ? 'scale(1.12)' : 'scale(1)',
+                        transition: 'transform .2s, background .2s',
+                        touchAction: 'none',
+                      }}>
+                      <I.mic style={{ width: 34, height: 34 }} />
+                    </button>
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', minHeight: 18, textAlign: 'center' }}>
+                      {recState === 'recording'
+                        ? `Recording… 0:${recTime.toString().padStart(2, '0')} — release when done`
+                        : (recHint || 'Hold to talk — tell us why.')}
+                    </div>
+                    <button onClick={() => setMode('text')} style={{
+                      background: 'transparent', border: 0, color: 'rgba(255,255,255,0.6)',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline',
+                      fontFamily: 'inherit', padding: 4,
+                    }}>Type instead</button>
+                  </React.Fragment>
+                ) : (
+                  <React.Fragment>
+                    <audio src={recordedUrl} controls style={{ width: '100%', height: 40 }} />
+                    <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                      <button onClick={resetRec} style={{
+                        flex: 1, background: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.28)',
+                        color: '#fff', padding: 14, borderRadius: 12, fontFamily: 'inherit',
+                        fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                      }}>Re-record</button>
+                      <PButton onClick={submit} style={{ flex: 2 }}>Submit & Earn {q.cents} pts</PButton>
+                    </div>
+                  </React.Fragment>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <textarea
+                  value={text}
+                  onChange={e => setText(e.target.value.slice(0, 280))}
+                  placeholder="Tell us why in a sentence or two."
+                  autoFocus
+                  style={{
+                    width: '100%', boxSizing: 'border-box', minHeight: 76,
+                    background: 'rgba(255,255,255,0.08)', color: '#fff',
+                    border: '1.5px solid rgba(255,255,255,0.24)', borderRadius: 12,
+                    padding: '12px 14px', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.45,
+                    outline: 'none', resize: 'none',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button onClick={() => setMode('voice')} style={{
+                    background: 'transparent', border: 0, color: 'rgba(255,255,255,0.6)',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline',
+                    fontFamily: 'inherit', padding: 4, flexShrink: 0,
+                  }}>Use voice</button>
+                  <PButton onClick={submit} disabled={!canSubmit} style={{ flex: 1 }}>
+                    Submit & Earn {q.cents} pts
+                  </PButton>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -3308,11 +3712,26 @@ function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Eyebrow tone="gray">{q.buyerType}</Eyebrow>
             {q.trial && <Eyebrow tone="accent">Trial</Eyebrow>}
+            {q.review && <Eyebrow tone="accent">Product review</Eyebrow>}
           </div>
           <PointsStamp points={q.cents} />
         </div>
+        {/* Review questions: media hero above the question text. */}
+        {q.review?.media?.length > 0 && (
+          <div style={{
+            margin: '0 0 14px', borderRadius: 12, overflow: 'hidden',
+            height: 130, background: SURFACE_TINT, flexShrink: 0,
+          }}>
+            <img
+              src={(q.review.media.find(m => m.type === 'image') || q.review.media[0]).src}
+              alt=""
+              draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block', pointerEvents: 'none' }}
+            />
+          </div>
+        )}
         <div style={{
-          fontSize: 22, fontWeight: 700, color: INK,
+          fontSize: q.review ? 19 : 22, fontWeight: 700, color: INK,
           letterSpacing: -0.4, lineHeight: 1.3, textWrap: 'balance',
           flex: 1,
         }}>{q.text}</div>
@@ -3409,7 +3828,7 @@ function PulseApp() {
     }
   }
 
-  function onAnswered({ qid, cents, mode, text, addTag, qualifies, tag }) {
+  function onAnswered({ qid, cents, mode, text, addTag, qualifies, tag, reaction }) {
     // Persist the answer if the member has claimed (has a token). Pre-claim
     // answers are held client-side and replayed to the server on claim.
     if (getToken('member')) {
@@ -3420,8 +3839,9 @@ function PulseApp() {
     const newQualified = usedTag && qualifies
       ? { ...state.qualifiedFor, [usedTag]: true }
       : state.qualifiedFor;
-    const history = [{ qid, cents, mode, ts: Date.now() }, ...state.history];
+    const history = [{ qid, cents, mode, reaction: reaction || null, ts: Date.now() }, ...state.history];
     const firstAnswer = !state.hasAnsweredOnce;
+    const answeredQ = findQuestion(qid);
 
     setState(s => ({
       ...s,
@@ -3438,11 +3858,16 @@ function PulseApp() {
     setCelebration({ cents });
     setTimeout(() => {
       setCelebration(null);
-      // First answer → claim screen. Otherwise → back to feed.
+      // First answer → claim screen. Otherwise, keep the vertical flow going:
+      // slide straight into the next unanswered For You question (TikTok-style);
+      // when the deck runs dry, land on the feed's "all caught up" state.
+      const next = !firstAnswer && answeredQ?.feed === 'foryou'
+        ? PULSE_QUESTIONS.find(x => x.feed === 'foryou' && !newAnswered[x.id])
+        : null;
       setState(s => ({
         ...s,
-        screen: firstAnswer ? 'claim' : 'feed',
-        qid: null,
+        screen: firstAnswer ? 'claim' : (next ? 'answer' : 'feed'),
+        qid: next ? next.id : null,
       }));
     }, 1300);
   }
@@ -3547,14 +3972,34 @@ function PulseApp() {
         openAnswer={(qid) => setState(s => ({ ...s, screen: 'answer', qid }))}
       />;
       break;
-    case 'answer':
-      body = <AnswerScreen
-        state={state}
-        qid={state.qid}
-        back={() => navigate(state.hasAnsweredOnce ? 'feed' : 'onboarding')}
-        onSubmit={onAnswered}
-      />;
+    case 'answer': {
+      // Review questions (media + reactions) open the full-screen story flow;
+      // classic questions keep the standard answer screen.
+      const activeQ = findQuestion(state.qid);
+      const backTo = () => navigate(state.hasAnsweredOnce ? 'feed' : 'onboarding');
+      body = activeQ?.review ? (
+        <ReviewScreen
+          state={state}
+          qid={state.qid}
+          back={backTo}
+          onSubmit={onAnswered}
+          onSkipNext={() => {
+            const next = PULSE_QUESTIONS.find(x =>
+              x.feed === 'foryou' && !state.answered[x.id] && x.id !== state.qid);
+            if (next) setState(s => ({ ...s, qid: next.id }));
+            else navigate(state.hasAnsweredOnce ? 'feed' : 'onboarding');
+          }}
+        />
+      ) : (
+        <AnswerScreen
+          state={state}
+          qid={state.qid}
+          back={backTo}
+          onSubmit={onAnswered}
+        />
+      );
       break;
+    }
     case 'claim':
       body = <ClaimScreen state={state} navigate={navigate} onClaim={onClaim} onSkip={onSkipClaim} />;
       break;
@@ -3573,7 +4018,10 @@ function PulseApp() {
 
   return (
     <React.Fragment>
-      <IOSDevice width={402} height={874} activeScreen={state.screen}>
+      <IOSDevice
+        width={402} height={874} activeScreen={state.screen}
+        dark={state.screen === 'answer' && !!findQuestion(state.qid)?.review}
+      >
         <div style={{
           width: '100%',
           height: '100%',
@@ -3589,7 +4037,7 @@ function PulseApp() {
               li-screen-in transition (member.css) and start scrolled to top.
               (Deliberately NOT a skeleton state: screens are instant local
               data, so a loader would only add fake delay.) */}
-          <div key={state.screen} className="li-screen" style={{
+          <div key={`${state.screen}:${state.qid || ''}`} className="li-screen" style={{
             flex: '1 1 auto',
             minHeight: 0,
             // 'answer' and 'onboarding' are fixed to the viewport (own internal
