@@ -2964,13 +2964,6 @@ function StreaksScreen({ state, navigate }) {
           display: 'flex', alignItems: 'center', gap: 18,
           position: 'relative', overflow: 'hidden',
         }}>
-          {/* glow */}
-          <div style={{
-            position: 'absolute', top: '-20%', right: '-15%',
-            width: 160, height: 160, borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(232,83,14,0.5) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }} />
           <ProgressRing size={104} stroke={7} progress={ringProgress} color={PRIMARY} trackColor="#2a2a2a">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 32, fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: -1 }}>{state.streak}</div>
