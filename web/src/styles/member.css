@@ -154,6 +154,8 @@
   @media (max-width: 520px) {
     .stage {
       min-height: 100dvh;
+      height: 100dvh;
+      overflow: hidden;
       padding: 0;
       gap: 0;
     }
@@ -162,9 +164,20 @@
     .demo-menu {
       display: none;
     }
+    /* Lock the page: the app IS the viewport and every screen scrolls its own
+       middle section. Without this, the base `min-height:100vh` (the LARGE iOS
+       viewport, URL bar hidden) leaves the page taller than the visible area
+       while the URL bar shows, so the whole app slides up under it — the
+       "heading doesn't stay" bug. Pin body to the dynamic viewport instead. */
     html, body {
       background: #FAFAFA;
       overscroll-behavior: none;
+      min-height: 0;
+      height: 100dvh;
+      overflow: hidden;
+      position: fixed;
+      inset: 0;
+      width: 100%;
     }
   }
 

@@ -3000,7 +3000,11 @@ function OnboardingScreen({ navigate, onPickFirst }) {
       setDragging(false);
       if (dx <= -THRESH) commit('left');
       else if (dx >= THRESH) commit('right');
-      else setDragX(0); // snap back (transition on)
+      else if (Math.abs(dx) < 6) {          // a tap (not a drag) → open to answer
+        setDragX(0);
+        if (!busyRef.current) onPickFirst(featured[topIdx].id);
+      }
+      else setDragX(0); // small drag → snap back (transition on)
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -3064,7 +3068,7 @@ function OnboardingScreen({ navigate, onPickFirst }) {
         minHeight: 16, transition: 'opacity .2s',
         opacity: dragX === 0 && !dragging ? 1 : 0,
       }}>
-        Swipe to browse · tap a button to choose
+        Tap the card to answer · swipe to browse
       </div>
 
       {/* Action buttons (mirror the swipe directions: Skip = left, Answer = right) */}
