@@ -188,3 +188,16 @@
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
+
+  /* ---------- Screen-change transition ---------- */
+  /* The screen body remounts per screen (key={state.screen}); this plays a
+     quick fade/rise so tab switches feel intentional. Functional motion only
+     (.2s) per the design rules. */
+  @keyframes li-screen-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .li-screen { animation: li-screen-in .2s ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .li-screen { animation: none; }
+  }

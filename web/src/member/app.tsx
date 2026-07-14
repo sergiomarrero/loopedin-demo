@@ -792,6 +792,15 @@ function MoneyStamp({ cents, size = 'lg', kind = 'pill' }) {
 // ---------- Primary button ----------
 function PButton({ children, onClick, kind = 'primary', size = 'lg', disabled, style = {}, type = 'button' }) {
   const [hover, setHover] = React.useState(false);
+  // Pressed feedback: quick scale-down while the finger is on the button, plus
+  // a haptic tick where the platform supports it (Android; iOS ignores it).
+  const [pressed, setPressed] = React.useState(false);
+  const press = () => {
+    if (disabled) return;
+    setPressed(true);
+    try { navigator.vibrate && navigator.vibrate(8); } catch { /* no haptics */ }
+  };
+  const release = () => setPressed(false);
   const base = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     border: 0, borderRadius: 14,
@@ -811,7 +820,7 @@ function PButton({ children, onClick, kind = 'primary', size = 'lg', disabled, s
     look = {
       background: disabled ? '#D8D6CB' : (hover ? PRIMARY_DARK : PRIMARY),
       color: '#fff',
-      transform: hover && !disabled ? 'translateY(-1px)' : 'translateY(0)',
+      transform: pressed && !disabled ? 'scale(0.97)' : (hover && !disabled ? 'translateY(-1px)' : 'translateY(0)'),
       boxShadow: disabled ? 'none' : (hover ? '0 6px 18px rgba(232,83,14,0.22)' : '0 2px 6px rgba(232,83,14,0.12)'),
     };
   } else if (kind === 'outline') {
@@ -829,7 +838,7 @@ function PButton({ children, onClick, kind = 'primary', size = 'lg', disabled, s
     look = {
       background: hover ? ACCENT_DARK : ACCENT,
       color: '#fff',
-      transform: hover && !disabled ? 'translateY(-1px)' : 'translateY(0)',
+      transform: pressed && !disabled ? 'scale(0.97)' : (hover && !disabled ? 'translateY(-1px)' : 'translateY(0)'),
     };
   } else if (kind === 'danger') {
     look = {
@@ -843,6 +852,10 @@ function PButton({ children, onClick, kind = 'primary', size = 'lg', disabled, s
       onClick={disabled ? undefined : onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onPointerDown={press}
+      onPointerUp={release}
+      onPointerLeave={() => { release(); setHover(false); }}
+      onPointerCancel={release}
       style={{ ...base, ...look, ...style }}
     >{children}</button>
   );
@@ -1426,14 +1439,45 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
     });
   };
 
+  // iOS-style edge swipe-back: a rightward drag that starts within 28px of the
+  // left edge follows the finger; past 90px it commits to back(). Mostly-
+  // vertical gestures cancel so normal scrolling never fights it.
+  const [dragX, setDragX] = React.useState(0);
+  const drag = React.useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    drag.current = t.clientX <= 28 ? { x0: t.clientX, y0: t.clientY, on: true } : null;
+  };
+  const onTouchMove = (e) => {
+    const d = drag.current;
+    if (!d || !d.on) return;
+    const t = e.touches[0];
+    const dx = t.clientX - d.x0;
+    const dy = Math.abs(t.clientY - d.y0);
+    if (dy > 70 && dx < 40) { d.on = false; setDragX(0); return; } // it's a scroll
+    if (dx > 0) setDragX(dx);
+  };
+  const onTouchEnd = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (d && d.on && dragX > 90) back();
+    setDragX(0);
+  };
+
   return (
-    <div style={{
+    <div
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      style={{
       // Fill the device exactly: the middle section scrolls, the submit bar is
       // a real bottom bar. (It was position:sticky before, which overlaid the
       // recorder's mic button whenever the content ran taller than the screen.)
       height: '100%',
       display: 'flex', flexDirection: 'column',
       background: SURFACE_WARM,
+      transform: dragX ? `translateX(${dragX}px)` : 'translateX(0)',
+      transition: dragX ? 'none' : 'transform .2s ease',
     }}>
     <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', flexDirection: 'column' }}>
       <TopBar
@@ -3311,8 +3355,11 @@ function PulseApp() {
           flexDirection: 'column',
           overflow: 'hidden',
         }}>
-          {/* Scrollable screen body */}
-          <div style={{
+          {/* Scrollable screen body — keyed per screen so switches replay the
+              li-screen-in transition (member.css) and start scrolled to top.
+              (Deliberately NOT a skeleton state: screens are instant local
+              data, so a loader would only add fake delay.) */}
+          <div key={state.screen} className="li-screen" style={{
             flex: '1 1 auto',
             minHeight: 0,
             overflowY: state.screen === 'answer' || state.screen === 'claim' || state.screen === 'onboarding' ? 'hidden' : 'auto',
