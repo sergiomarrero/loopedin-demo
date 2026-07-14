@@ -1821,7 +1821,7 @@ function ClaimScreen({ state, onClaim, onSkip }) {
         }
       />
 
-      <div style={{ padding: '8px 22px 24px' }}>
+      <div style={{ padding: '8px 22px calc(24px + env(safe-area-inset-bottom))' }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: PRIMARY_DARK, letterSpacing: 1, marginBottom: 8 }}>
           NICE WORK
         </div>
@@ -3447,10 +3447,14 @@ function PulseApp() {
           <div key={state.screen} className="li-screen" style={{
             flex: '1 1 auto',
             minHeight: 0,
-            overflowY: state.screen === 'answer' || state.screen === 'claim' || state.screen === 'onboarding' ? 'hidden' : 'auto',
+            // 'answer' and 'onboarding' are fixed to the viewport (own internal
+            // scroll / no scroll). 'claim' is a tall form that must scroll — it
+            // owns no inner scroller, so let this wrapper scroll it. Everything
+            // else (feed/wallet/streaks/profile) scrolls here too.
+            overflowY: state.screen === 'answer' || state.screen === 'onboarding' ? 'hidden' : 'auto',
             overflowX: 'hidden',
             WebkitOverflowScrolling: 'touch',
-            display: state.screen === 'answer' || state.screen === 'claim' || state.screen === 'onboarding' ? 'flex' : 'block',
+            display: state.screen === 'answer' || state.screen === 'onboarding' ? 'flex' : 'block',
             flexDirection: 'column',
           }}>
             {body}
