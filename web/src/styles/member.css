@@ -167,3 +167,24 @@
       overscroll-behavior: none;
     }
   }
+
+  /* ---------- Mobile layout vars + touch feel ---------- */
+  /* TopBar top padding and the feed tabs' sticky offset differ between the
+     desktop demo frame (fake 58px status bar) and a real phone (safe-area is
+     padded by the device shell, so the header only needs breathing room). */
+  :root {
+    --li-top-pad: 58px;
+    --li-tabs-top: 112px; /* sticky brand header height: 58 + 38 + 16 */
+  }
+  @media (max-width: 520px) {
+    :root {
+      --li-top-pad: 12px;
+      --li-tabs-top: 66px; /* 12 + 38 + 16 */
+    }
+  }
+  /* Kill the gray tap flash and the 350ms double-tap-zoom delay on controls —
+     the two biggest "this feels like a website" tells. */
+  button, a, [role='button'] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }

@@ -211,6 +211,10 @@ function IOSList({ header, children, dark = false }) {
 // indicator — only renders on larger screens. On small screens the app goes
 // full-bleed and defers to the actual device: real status bar (safe-area
 // inset), real home indicator. The desktop demo presentation is unchanged.
+// Lets fixed chrome (the tab bar) react to scroll direction: hide on
+// scroll-down, pop back on scroll-up or near the top — the native-app pattern.
+const ScrollChromeContext = React.createContext(false);
+
 function useIsRealPhone() {
   const QUERY = '(max-width: 520px)';
   const [isPhone, setIsPhone] = React.useState(
@@ -230,6 +234,29 @@ function IOSDevice({
   title, keyboard = false,
 }) {
   const fullBleed = useIsRealPhone();
+  // Scroll-direction tracking for auto-hiding chrome (tab bar). Native
+  // listener on the scroll container — passive, so it never blocks scrolling.
+  const [chromeHidden, setChromeHidden] = React.useState(false);
+  const scrollRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // capture: true — scroll events don't bubble, but capture-phase listeners
+    // on an ancestor still see them, so this works for WHICHEVER descendant
+    // actually scrolls (each screen owns its own scroll area).
+    let lastY = 0;
+    const onScroll = (e) => {
+      const t = e.target;
+      if (!t || typeof t.scrollTop !== 'number') return;
+      const y = t.scrollTop;
+      const dy = y - lastY;
+      if (y < 80 || dy < -8) setChromeHidden(false);
+      else if (dy > 8) setChromeHidden(true);
+      lastY = y;
+    };
+    el.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => el.removeEventListener('scroll', onScroll, { capture: true });
+  }, []);
   return (
     <div style={{
       width: fullBleed ? '100vw' : width,
@@ -267,7 +294,9 @@ function IOSDevice({
         boxSizing: 'border-box',
       }}>
         {title !== undefined && <IOSNavBar title={title} dark={dark} />}
-        <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
+        <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
+          <ScrollChromeContext.Provider value={chromeHidden}>{children}</ScrollChromeContext.Provider>
+        </div>
         {keyboard && <IOSKeyboard dark={dark} />}
       </div>
       {/* home indicator — simulated bezel only (the real phone draws its own) */}
@@ -875,15 +904,19 @@ const I = {
 };
 
 // ---------- Top bar ----------
-function TopBar({ title, leading, trailing, subtitle, background = SURFACE_WARM }) {
+function TopBar({ title, leading, trailing, subtitle, background = SURFACE_WARM, sticky = false }) {
   return (
     <div style={{
-      padding: '58px 18px 16px',
+      // --li-top-pad: 58px inside the demo frame (clears the fake status bar),
+      // 12px on real phones (the device pads the safe area itself). member.css.
+      padding: 'var(--li-top-pad, 58px) 18px 16px',
       display: 'flex', flexDirection: 'column',
       gap: subtitle ? 6 : 0,
       background,
-      position: 'relative',
-      zIndex: 2,
+      // sticky: the brand header persists while the content scrolls beneath it.
+      position: sticky ? 'sticky' : 'relative',
+      top: sticky ? 0 : undefined,
+      zIndex: sticky ? 6 : 2,
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -933,6 +966,8 @@ function BackButton({ onClick, label }) {
 
 // ---------- Tab bar ----------
 function TabBar({ active, onChange, anonymous }) {
+  const fullBleed = useIsRealPhone();
+  const hidden = React.useContext(ScrollChromeContext);
   const tabs = [
     { id: 'feed',    label: 'Answer',  Icon: I.feed },
     { id: 'wallet',  label: 'Wallet',  Icon: I.wallet },
@@ -942,12 +977,16 @@ function TabBar({ active, onChange, anonymous }) {
   return (
     <div style={{
       position: 'absolute', bottom: 0, left: 0, right: 0,
-      paddingBottom: 26,
+      // Real phones: clear the actual home indicator; demo frame: fake one (26px).
+      paddingBottom: fullBleed ? 'max(env(safe-area-inset-bottom), 10px)' : 26,
       background: 'rgba(255,255,255,0.97)',
       backdropFilter: 'blur(14px)',
       WebkitBackdropFilter: 'blur(14px)',
       borderTop: `1px solid ${BORDER}`,
       zIndex: 30,
+      // Native pattern: slide away on scroll-down, pop back on scroll-up.
+      transform: hidden ? 'translateY(110%)' : 'translateY(0)',
+      transition: 'transform .25s ease',
     }}>
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
@@ -1166,9 +1205,10 @@ function FeedScreen({ state, navigate, openAnswer }) {
   const browseLocked = tab === 'browse' && !profileReady;
 
   return (
-    <div style={{ paddingBottom: 110, background: SURFACE_WARM, minHeight: '100%' }}>
+    <div style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))', background: SURFACE_WARM, minHeight: '100%' }}>
       <TopBar
         background={SURFACE_WARM}
+        sticky
         leading={
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <div style={{
@@ -1225,7 +1265,8 @@ function FeedScreen({ state, navigate, openAnswer }) {
       {/* Tab segmented control — sticks just below the status bar, not behind it */}
       <div style={{
         display: 'flex', gap: 8, padding: '18px 18px 14px',
-        position: 'sticky', top: 62, zIndex: 4,
+        // Sits flush under the sticky brand header (height differs demo vs phone).
+        position: 'sticky', top: 'var(--li-tabs-top, 112px)', zIndex: 4,
         background: SURFACE_WARM,
       }}>
         <SegTab active={tab === 'foryou'} onClick={() => setTab('foryou')}
@@ -1387,10 +1428,14 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
 
   return (
     <div style={{
-      minHeight: '100%',
+      // Fill the device exactly: the middle section scrolls, the submit bar is
+      // a real bottom bar. (It was position:sticky before, which overlaid the
+      // recorder's mic button whenever the content ran taller than the screen.)
+      height: '100%',
       display: 'flex', flexDirection: 'column',
       background: SURFACE_WARM,
     }}>
+    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', flexDirection: 'column' }}>
       <TopBar
         background={SURFACE_WARM}
         leading={<BackButton onClick={back} />}
@@ -1532,12 +1577,14 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
         </div>
       )}
 
-      {/* Submit footer */}
+    </div>
+
+      {/* Submit footer — fixed bottom bar of the flex column, never overlaps */}
       <div style={{
-        padding: '14px 18px 24px',
+        padding: '14px 18px calc(16px + env(safe-area-inset-bottom))',
         borderTop: `1px solid ${BORDER}`,
         background: SURFACE,
-        position: 'sticky', bottom: 0, zIndex: 5,
+        zIndex: 5,
       }}>
         <PButton onClick={handleSubmit} disabled={!canSubmit}>
           {canSubmit
@@ -1850,7 +1897,7 @@ function WalletScreen({ state, navigate }) {
   const toNext = Math.max(0, nextTier.cents - state.cents);
 
   return (
-    <div style={{ paddingBottom: 110 }}>
+    <div style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))' }}>
       <TopBar
         leading={<div style={{ fontWeight: 800, color: INK, fontSize: 15 }}>Wallet</div>}
         trailing={
@@ -2043,7 +2090,7 @@ function ProfileScreen({ state, navigate, onUpdate }) {
   const hiddenCount = LIVED_TAGS.length - visibleTags.length;
 
   return (
-    <div style={{ paddingBottom: 110 }}>
+    <div style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))' }}>
       <TopBar
         leading={<div style={{ fontWeight: 800, color: INK, fontSize: 15 }}>Profile</div>}
         trailing={<Eyebrow tone="gray">Anonymous</Eyebrow>}
@@ -2474,7 +2521,7 @@ function AddressSheet({ value, onSave, onClose }) {
         style={{
           border: `1px solid ${BORDER_2}`, background: '#fff',
           borderRadius: 10, padding: '11px 12px',
-          fontFamily: 'inherit', fontSize: 15, color: INK,
+          fontFamily: 'inherit', fontSize: 16, color: INK,
           outline: 'none', boxSizing: 'border-box',
         }}
         {...props}
@@ -2702,7 +2749,7 @@ function StreaksScreen({ state, navigate }) {
   const ringProgress = Math.min(1, state.streak / 7);
 
   return (
-    <div style={{ paddingBottom: 110 }}>
+    <div style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))' }}>
       <TopBar
         leading={<div style={{ fontWeight: 800, color: INK, fontSize: 15 }}>Streaks & Badges</div>}
       />
