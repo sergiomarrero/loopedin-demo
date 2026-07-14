@@ -1420,6 +1420,11 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
   const [text, setText] = React.useState('');
   const [recState, setRecState] = React.useState('idle'); // 'idle' | 'recording' | 'recorded'
   const [recTime, setRecTime] = React.useState(0);
+  const [recordedUrl, setRecordedUrl] = React.useState(null);
+  const [recError, setRecError] = React.useState(null);
+  const recorderRef = React.useRef(null);
+  const chunksRef = React.useRef([]);
+  const streamRef = React.useRef(null);
 
   // record timer
   React.useEffect(() => {
@@ -1427,6 +1432,49 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
     const t = setInterval(() => setRecTime(r => r + 1), 1000);
     return () => clearInterval(t);
   }, [recState]);
+
+  // Real in-browser recording via MediaRecorder. Audio stays on-device (demo:
+  // no upload / transcription backend yet), but records + plays back for real.
+  const startRecording = async () => {
+    setRecError(null);
+    if (recordedUrl) { URL.revokeObjectURL(recordedUrl); setRecordedUrl(null); }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        setRecordedUrl(URL.createObjectURL(blob));
+        (streamRef.current?.getTracks() || []).forEach(t => t.stop());
+        streamRef.current = null;
+      };
+      recorderRef.current = mr;
+      mr.start();
+      setRecTime(0);
+      setRecState('recording');
+    } catch (err) {
+      setRecError('We couldn’t reach your microphone. Check the mic permission, or type your answer instead.');
+      setRecState('idle');
+    }
+  };
+  const stopRecording = () => {
+    const mr = recorderRef.current;
+    if (mr && mr.state !== 'inactive') mr.stop();
+    setRecState('recorded');
+  };
+  const resetRecording = () => {
+    if (recordedUrl) { URL.revokeObjectURL(recordedUrl); setRecordedUrl(null); }
+    setRecState('idle'); setRecTime(0);
+  };
+  // Stop the mic + free the clip if the screen unmounts mid-recording.
+  React.useEffect(() => () => {
+    const mr = recorderRef.current;
+    if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} }
+    (streamRef.current?.getTracks() || []).forEach(t => t.stop());
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+  }, []);
 
   // Qualifier prompt — show if it's a Browse question with a qualifier and user hasn't confirmed
   const needsQualifier = q.qualifier && !state.tags.includes(q.qualifier.tag);
@@ -1624,9 +1672,11 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
           <VoiceRecorder
             recState={recState}
             recTime={recTime}
-            onStart={() => { setRecState('recording'); setRecTime(0); }}
-            onStop={() => setRecState('recorded')}
-            onRestart={() => { setRecState('idle'); setRecTime(0); }}
+            recordedUrl={recordedUrl}
+            error={recError}
+            onStart={startRecording}
+            onStop={stopRecording}
+            onRestart={resetRecording}
           />
         </div>
       )}
@@ -1675,7 +1725,7 @@ function ModeChoice({ title, sub, tag, onClick }) {
 }
 
 // ---------- Voice recorder (visual only — animated bars) ----------
-function VoiceRecorder({ recState, recTime, onStart, onStop, onRestart }) {
+function VoiceRecorder({ recState, recTime, recordedUrl, error, onStart, onStop, onRestart }) {
   const fmtTime = (s) => `0:${s.toString().padStart(2, '0')}`;
   return (
     <div style={{
@@ -1708,6 +1758,23 @@ function VoiceRecorder({ recState, recTime, onStart, onStop, onRestart }) {
           </span>
         )}
       </div>
+
+      {/* Playback of the real recording */}
+      {recState === 'recorded' && recordedUrl && (
+        <audio
+          src={recordedUrl}
+          controls
+          style={{ width: '100%', maxWidth: 280, height: 40 }}
+        />
+      )}
+
+      {/* Mic error (permission denied / unsupported) */}
+      {error && (
+        <div style={{
+          fontSize: 13, color: DANGER, textAlign: 'center', lineHeight: 1.5,
+          padding: '0 20px', fontWeight: 500,
+        }}>{error}</div>
+      )}
     </div>
   );
 }
@@ -2116,6 +2183,25 @@ function ProfileScreen({ state, navigate, onUpdate }) {
   const [yearOpen, setYearOpen] = React.useState(false);
   const [notesOpen, setNotesOpen] = React.useState(false);
   const [showAllTags, setShowAllTags] = React.useState(false);
+  // Document verification (demo): pick a photo/PDF on-device to verify a tag.
+  // Nothing is uploaded — there's no review backend yet — but it marks the tag
+  // Verified locally so the flow is fully demoable.
+  const fileInputRef = React.useRef(null);
+  const pendingTagRef = React.useRef(null);
+  const openVerify = (tagId) => { pendingTagRef.current = tagId || null; fileInputRef.current?.click(); };
+  const onVerifyFile = (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    const verifiable = LIVED_TAGS.filter(t => t.verify).map(t => t.id);
+    const verified = [...(p.verifiedTags || [])];
+    let tags = [...(p.tags || [])];
+    const mark = (id) => { if (!verified.includes(id)) verified.push(id); if (!tags.includes(id)) tags.push(id); };
+    if (pendingTagRef.current) mark(pendingTagRef.current);
+    else tags.filter(id => verifiable.includes(id)).forEach(mark); // card upload: verify selected verifiable tags
+    pendingTagRef.current = null;
+    onUpdate({ profile: { ...p, tags, verifiedTags: verified, docOnFile: true } });
+  };
 
   // Display value for the address row.
   const addressDisplay = (() => {
@@ -2287,14 +2373,18 @@ function ProfileScreen({ state, navigate, onUpdate }) {
               {on && <I.check />}
               <span>{t.label}</span>
               {t.verify && (
-                <span style={{
-                  fontSize: 9, letterSpacing: 0.8, textTransform: 'uppercase',
-                  fontWeight: 700,
-                  color: verified ? PRIMARY : INK_4,
-                  background: verified ? PRIMARY_TINT : '#f0f0f0',
-                  border: `1px solid ${verified ? PRIMARY_BORDER : '#e3e3e3'}`,
-                  padding: '2px 5px', borderRadius: 4,
-                }}>
+                <span
+                  role={verified ? undefined : 'button'}
+                  onClick={verified ? undefined : (e) => { e.stopPropagation(); openVerify(t.id); }}
+                  style={{
+                    fontSize: 9, letterSpacing: 0.8, textTransform: 'uppercase',
+                    fontWeight: 700,
+                    color: verified ? PRIMARY : INK_4,
+                    background: verified ? PRIMARY_TINT : '#f0f0f0',
+                    border: `1px solid ${verified ? PRIMARY_BORDER : '#e3e3e3'}`,
+                    padding: '2px 5px', borderRadius: 4,
+                    cursor: verified ? 'default' : 'pointer',
+                  }}>
                   {verified ? 'Verified' : 'Verify +'}
                 </span>
               )}
@@ -2324,20 +2414,33 @@ function ProfileScreen({ state, navigate, onUpdate }) {
       <div style={{ padding: '20px 20px 0' }}>
         <PCard style={{ padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-            <Eyebrow tone="green">Coming soon</Eyebrow>
+            <Eyebrow tone="accent">{p.docOnFile ? 'Document on file' : 'Verify'}</Eyebrow>
           </div>
           <div style={{ fontSize: 15, fontWeight: 700, color: INK, letterSpacing: -0.2 }}>
             Verify with a document to unlock high-value questions.
           </div>
           <div style={{ fontSize: 12, color: INK_4, marginTop: 6, lineHeight: 1.5 }}>
-            We'll let you upload one document (an ID, a benefits letter, anything) to verify tags like
-            "veteran" or "Section 8". Verified tags earn 2–3× more per answer.
+            Upload one document (an ID, a benefits letter, anything) to verify tags like
+            "veteran" or "Section 8". Verified tags earn 2–3× more per answer. Your document stays
+            on your device in this demo — nothing is uploaded.
           </div>
           <div style={{ marginTop: 12 }}>
-            <PButton kind="outline" size="sm" disabled>Notify me when ready</PButton>
+            <PButton kind="outline" size="sm" onClick={() => openVerify(null)}>
+              {p.docOnFile ? 'Upload another document' : 'Upload a document'}
+            </PButton>
           </div>
         </PCard>
       </div>
+
+      {/* Hidden picker shared by the per-tag "Verify +" chips and the card above. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={onVerifyFile}
+      />
 
       <SectionTitle>Account</SectionTitle>
       <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
