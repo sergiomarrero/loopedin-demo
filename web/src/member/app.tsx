@@ -1943,6 +1943,7 @@ function WalletScreen({ state, navigate }) {
   return (
     <div style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))' }}>
       <TopBar
+        sticky
         leading={<div style={{ fontWeight: 800, color: INK, fontSize: 15 }}>Wallet</div>}
         trailing={
           state.claimed
@@ -2136,6 +2137,7 @@ function ProfileScreen({ state, navigate, onUpdate }) {
   return (
     <div style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))' }}>
       <TopBar
+        sticky
         leading={<div style={{ fontWeight: 800, color: INK, fontSize: 15 }}>Profile</div>}
         trailing={<Eyebrow tone="gray">Anonymous</Eyebrow>}
       />
@@ -2795,6 +2797,7 @@ function StreaksScreen({ state, navigate }) {
   return (
     <div style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))' }}>
       <TopBar
+        sticky
         leading={<div style={{ fontWeight: 800, color: INK, fontSize: 15 }}>Streaks & Badges</div>}
       />
 
@@ -2949,19 +2952,57 @@ function PointsStamp({ points }) {
 function OnboardingScreen({ navigate, onPickFirst }) {
   const featured = PULSE_QUESTIONS.filter(q => q.feed === 'foryou').slice(0, 3);
   const [topIdx, setTopIdx] = React.useState(0);
-  const [exiting, setExiting] = React.useState(null); // 'left' | 'right' | null
+  const [dragX, setDragX] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const startRef = React.useRef(null);
+  const busyRef = React.useRef(false);
+  const THRESH = 96; // px past which a release commits the swipe
 
-  function pass() {
-    setExiting('left');
+  // Commit a swipe: 'left' flies the card off and reveals the next question
+  // (skip / browse the deck); 'right' opens the answer flow for this card.
+  function commit(dir) {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setDragging(false);
+    setDragX(dir === 'left' ? -640 : 640); // fly out (transition is on now)
     setTimeout(() => {
-      setTopIdx(i => (i + 1) % featured.length);
-      setExiting(null);
-    }, 280);
+      if (dir === 'right') {
+        onPickFirst(featured[topIdx].id);
+      } else {
+        setTopIdx(i => (i + 1) % featured.length);
+        setDragX(0); // new card is freshly keyed → mounts centered, no slide-in
+      }
+      busyRef.current = false;
+    }, 230);
   }
-  function answer() {
-    setExiting('right');
-    setTimeout(() => onPickFirst(featured[topIdx].id), 200);
-  }
+
+  // Robust drag: on press, listen for move/up on WINDOW (so the gesture keeps
+  // tracking even if the finger leaves the card) and read the delta straight
+  // off the event — no pointer-capture, no stale state.
+  const onDown = (e) => {
+    if (busyRef.current) return;
+    if (e.cancelable) e.preventDefault(); // no text selection / native drag
+    const sx = e.clientX;
+    startRef.current = { x: sx };
+    setDragging(true);
+    const move = (ev) => {
+      if (!startRef.current) return;
+      setDragX(ev.clientX - startRef.current.x);
+    };
+    const up = (ev) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const dx = startRef.current ? ev.clientX - startRef.current.x : 0;
+      startRef.current = null;
+      setDragging(false);
+      if (dx <= -THRESH) commit('left');
+      else if (dx >= THRESH) commit('right');
+      else setDragX(0); // snap back (transition on)
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const handlers = { onPointerDown: onDown };
 
   const top = featured[topIdx];
   const next = featured[(topIdx + 1) % featured.length];
@@ -3001,32 +3042,42 @@ function OnboardingScreen({ navigate, onPickFirst }) {
         </div>
       </div>
 
-      {/* Card stack */}
+      {/* Swipeable card deck — drag the top card: left to skip, right to answer. */}
       <div style={{
         position: 'relative',
-        margin: '16px 22px 8px',
+        margin: '16px 22px 6px',
         flex: 1,
         minHeight: 300,
       }}>
         <StackCard q={next2} depth={2} />
         <StackCard q={next}  depth={1} />
-        <StackCard q={top}   depth={0} exiting={exiting} />
+        <StackCard key={topIdx} q={top} depth={0}
+          dragX={dragX} dragging={dragging} handlers={handlers} />
       </div>
 
-      {/* Action buttons */}
+      {/* Swipe hint — only while at rest, so users discover the gesture. */}
+      <div style={{
+        textAlign: 'center', fontSize: 12, color: INK_4, letterSpacing: 0.2,
+        minHeight: 16, transition: 'opacity .2s',
+        opacity: dragX === 0 && !dragging ? 1 : 0,
+      }}>
+        Swipe to browse · tap a button to choose
+      </div>
+
+      {/* Action buttons (mirror the swipe directions: Skip = left, Answer = right) */}
       <div style={{
         padding: '8px 22px 28px',
         display: 'flex', flexDirection: 'column', gap: 12,
       }}>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={pass} style={{
+          <button onClick={() => commit('left')} style={{
             flex: 1, minHeight: 58,
             background: SURFACE, border: `1.5px solid ${BORDER_2}`,
             color: INK_2, borderRadius: 14,
             fontFamily: 'inherit', fontWeight: 700, fontSize: 14, letterSpacing: -0.1,
             cursor: 'pointer',
           }}>Skip</button>
-          <PButton onClick={answer} style={{ flex: 2 }}>
+          <PButton onClick={() => commit('right')} style={{ flex: 2 }}>
             Answer & Earn {top?.cents || 0} pts
           </PButton>
         </div>
@@ -3041,36 +3092,63 @@ function OnboardingScreen({ navigate, onPickFirst }) {
   );
 }
 
-function StackCard({ q, depth, exiting }) {
+function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
   if (!q) return null;
+  const isTop = depth === 0;
   const scale = 1 - depth * 0.04;
   const ty = depth * 10;
   const z = 10 - depth;
-  const op = depth === 0 ? 1 : (depth === 1 ? 0.7 : 0.4);
+  const op = isTop ? 1 : (depth === 1 ? 0.7 : 0.4);
 
-  let animation = 'none';
-  if (depth === 0 && exiting === 'left')  animation = 'card-exit-left .3s ease forwards';
-  if (depth === 0 && exiting === 'right') animation = 'card-exit-right .25s ease forwards';
+  // The top card follows the finger (translate + slight rotate); resting cards
+  // sit scaled/offset behind it. Transition is off only while actively dragging
+  // so the card tracks 1:1, then eases on release / fly-out.
+  const transform = isTop
+    ? `translateX(${dragX}px) rotate(${(dragX * 0.03).toFixed(2)}deg)`
+    : `translateY(${ty}px) scale(${scale})`;
+  const strength = Math.min(1, Math.abs(dragX) / 96);
 
   return (
-    <div style={{
+    <div {...(isTop ? handlers : {})} style={{
       position: 'absolute', inset: 0,
-      transform: `translateY(${ty}px) scale(${scale})`,
+      transform,
+      transition: (isTop && dragging) ? 'none' : 'transform .25s ease, opacity .25s',
       opacity: op,
       zIndex: z,
-      pointerEvents: depth === 0 ? 'auto' : 'none',
-      animation: depth === 0 ? animation : 'none',
+      pointerEvents: isTop ? 'auto' : 'none',
+      touchAction: isTop ? 'none' : 'auto', // top card owns the gesture (deck doesn't scroll)
+      userSelect: 'none', WebkitUserSelect: 'none',
+      cursor: isTop ? 'grab' : 'default',
     }}>
       <div style={{
-        background: depth === 0 ? SURFACE : SURFACE_TINT,
-        border: `1px solid ${depth === 0 ? BORDER_2 : BORDER}`,
+        position: 'relative',
+        background: isTop ? SURFACE : SURFACE_TINT,
+        border: `1px solid ${isTop ? BORDER_2 : BORDER}`,
         borderRadius: 18,
         padding: 22,
         height: '100%',
         boxSizing: 'border-box',
         display: 'flex', flexDirection: 'column',
-        boxShadow: depth === 0 ? '0 12px 36px rgba(28,27,25,0.06)' : 'none',
+        boxShadow: isTop ? '0 12px 36px rgba(28,27,25,0.06)' : 'none',
+        overflow: 'hidden',
       }}>
+        {/* Directional swipe cues — appear as the card is dragged. */}
+        {isTop && dragX > 8 && (
+          <span style={{
+            position: 'absolute', top: 16, left: 16, zIndex: 2,
+            background: PRIMARY, color: '#fff', borderRadius: 999,
+            padding: '5px 11px', fontSize: 11, fontWeight: 800, letterSpacing: 1,
+            textTransform: 'uppercase', opacity: strength,
+          }}>Answer →</span>
+        )}
+        {isTop && dragX < -8 && (
+          <span style={{
+            position: 'absolute', top: 16, right: 16, zIndex: 2,
+            background: SURFACE_TINT, color: INK_3, border: `1px solid ${BORDER_2}`,
+            borderRadius: 999, padding: '5px 11px', fontSize: 11, fontWeight: 800,
+            letterSpacing: 1, textTransform: 'uppercase', opacity: strength,
+          }}>Skip</span>
+        )}
         <div style={{
           display: 'flex', alignItems: 'flex-start',
           justifyContent: 'space-between', gap: 12, marginBottom: 16,
