@@ -206,49 +206,83 @@ function IOSList({ header, children, dark = false }) {
 // ─────────────────────────────────────────────────────────────
 // Device frame
 // ─────────────────────────────────────────────────────────────
+// On a REAL phone the simulated frame is absurd (a phone inside your phone),
+// so the device chrome — bezel, dynamic island, fake status bar, fake home
+// indicator — only renders on larger screens. On small screens the app goes
+// full-bleed and defers to the actual device: real status bar (safe-area
+// inset), real home indicator. The desktop demo presentation is unchanged.
+function useIsRealPhone() {
+  const QUERY = '(max-width: 520px)';
+  const [isPhone, setIsPhone] = React.useState(
+    () => typeof window !== 'undefined' && window.matchMedia(QUERY).matches,
+  );
+  React.useEffect(() => {
+    const mq = window.matchMedia(QUERY);
+    const onChange = (e) => setIsPhone(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return isPhone;
+}
+
 function IOSDevice({
   children, width = 402, height = 874, dark = false,
   title, keyboard = false,
 }) {
+  const fullBleed = useIsRealPhone();
   return (
     <div style={{
-      width, height, borderRadius: 48, overflow: 'hidden',
+      width: fullBleed ? '100vw' : width,
+      height: fullBleed ? '100dvh' : height,
+      borderRadius: fullBleed ? 0 : 48, overflow: 'hidden',
       position: 'relative', background: dark ? '#000' : '#F2F2F7',
-      boxShadow: '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
+      boxShadow: fullBleed ? 'none' : '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
       fontFamily: '-apple-system, system-ui, sans-serif',
       WebkitFontSmoothing: 'antialiased',
     }}>
-      {/* dynamic island */}
-      <div style={{
-        position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
-        width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
-      }} />
-      {/* status bar (absolute) — opaque/blurred so scrolled content doesn't show through behind it */}
+      {/* dynamic island — simulated bezel only */}
+      {!fullBleed && (
+        <div style={{
+          position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
+          width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
+        }} />
+      )}
+      {/* status bar (absolute) — opaque/blurred so scrolled content doesn't show through
+          behind it. Full-bleed keeps only a safe-area-tall backdrop under the REAL notch. */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         background: dark ? 'rgba(0,0,0,0.6)' : 'rgba(250,250,246,0.82)',
         backdropFilter: 'saturate(180%) blur(20px)',
         WebkitBackdropFilter: 'saturate(180%) blur(20px)',
       }}>
-        <IOSStatusBar dark={dark} />
+        {fullBleed
+          ? <div style={{ height: 'env(safe-area-inset-top)' }} />
+          : <IOSStatusBar dark={dark} />}
       </div>
       {/* nav + content */}
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{
+        height: '100%', display: 'flex', flexDirection: 'column',
+        paddingTop: fullBleed ? 'env(safe-area-inset-top)' : 0,
+        paddingBottom: fullBleed ? 'env(safe-area-inset-bottom)' : 0,
+        boxSizing: 'border-box',
+      }}>
         {title !== undefined && <IOSNavBar title={title} dark={dark} />}
         <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
         {keyboard && <IOSKeyboard dark={dark} />}
       </div>
-      {/* home indicator — always on top */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
-        height: 34, display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
-        paddingBottom: 8, pointerEvents: 'none',
-      }}>
+      {/* home indicator — simulated bezel only (the real phone draws its own) */}
+      {!fullBleed && (
         <div style={{
-          width: 139, height: 5, borderRadius: 100,
-          background: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.25)',
-        }} />
-      </div>
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
+          height: 34, display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+          paddingBottom: 8, pointerEvents: 'none',
+        }}>
+          <div style={{
+            width: 139, height: 5, borderRadius: 100,
+            background: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.25)',
+          }} />
+        </div>
+      )}
     </div>
   );
 }
