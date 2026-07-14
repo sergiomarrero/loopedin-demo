@@ -730,9 +730,11 @@ const ACCENT_TINT  = '#FFF1E8';
 const ACCENT_BORDER= '#F7C8A8';
 const INK          = '#1C1B19';
 const INK_2        = '#2E2A27';
-const INK_3        = '#6B635E';
-const INK_4        = '#9A938D';
-const INK_5        = '#C6BEB6';
+// Muted scale darkened for readability (visually-impaired / low-contrast users):
+// INK_3 body copy ~9:1, INK_4 hints ~5.6:1 (passes WCAG AA), INK_5 subtle ~3.6:1.
+const INK_3        = '#4A443F';
+const INK_4        = '#6B635E';
+const INK_5        = '#8A837D';
 const SURFACE      = '#FFFFFF';
 const SURFACE_WARM = '#FBF8F4';
 const SURFACE_TINT = '#F5F0EA';
@@ -2134,8 +2136,10 @@ function ProfileScreen({ state, navigate, onUpdate }) {
     : null;
 
   // Lived-experience tag list — primary by default, with a "show more" reveal.
-  const visibleTags = LIVED_TAGS.filter(t => showAllTags || t.primary || p.tags.includes(t.id));
-  const hiddenCount = LIVED_TAGS.length - visibleTags.length;
+  // 'senior' is excluded: it's auto-derived from the birth year, not hand-tapped.
+  const manualTags = LIVED_TAGS.filter(t => t.id !== 'senior');
+  const visibleTags = manualTags.filter(t => showAllTags || t.primary || p.tags.includes(t.id));
+  const hiddenCount = manualTags.length - visibleTags.length;
 
   return (
     <div style={{ paddingBottom: 'calc(118px + env(safe-area-inset-bottom))' }}>
@@ -2376,7 +2380,15 @@ function ProfileScreen({ state, navigate, onUpdate }) {
       {yearOpen && (
         <BirthYearSheet
           value={p.birthYear}
-          onSave={(y) => { onUpdate({ profile: { ...p, birthYear: y } }); setYearOpen(false); }}
+          onSave={(y) => {
+            // Age-derived tags are automatic, not hand-tapped: keep the
+            // "Senior (65+)" tag in sync with the entered birth year.
+            const age = new Date().getFullYear() - y;
+            const tags = (p.tags || []).filter(x => x !== 'senior');
+            if (age >= 65) tags.push('senior');
+            onUpdate({ profile: { ...p, birthYear: y, tags } });
+            setYearOpen(false);
+          }}
           onClose={() => setYearOpen(false)}
         />
       )}
@@ -2468,9 +2480,28 @@ function isProfileQualified(state) {
 }
 
 // Generic option picker sheet — single (radio) or multi-select.
+// Keyboard-aware bottom sheets. When the soft keyboard opens, the visual
+// viewport shrinks but our fixed 100dvh app does not, so a bottom-anchored
+// sheet's action buttons hide behind the keyboard. Track the keyboard height
+// via the VisualViewport API so the sheet can lift itself above it.
+function useKeyboardInset() {
+  const [inset, setInset] = React.useState(0);
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update); };
+  }, []);
+  return inset;
+}
+
 function PickerSheet({ title, options, value, onPick, onClose, multi = false }) {
   // Track multi-select state locally so we don't re-render the whole app on every tap.
   const [draft, setDraft] = React.useState(() => Array.isArray(value) ? value : (value ? [value] : []));
+  const kb = useKeyboardInset();
   const isSelected = (opt) => multi ? draft.includes(opt) : value === opt;
   const toggle = (opt) => {
     if (multi) {
@@ -2485,6 +2516,8 @@ function PickerSheet({ title, options, value, onPick, onClose, multi = false }) 
       background: 'rgba(17,17,17,0.4)',
       display: 'flex', alignItems: 'flex-end',
       animation: 'fade-in .2s ease',
+      // Lift the sheet above the soft keyboard so its input + buttons stay visible.
+      paddingBottom: kb, transition: 'padding-bottom .2s ease',
     }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: '#fff',
@@ -2560,6 +2593,7 @@ function AddressSheet({ value, onSave, onClose }) {
   const [a, setA] = React.useState(init);
   const zipOk = /^\d{5}$/.test(a.zip);
   const canSave = zipOk && a.street.trim() && a.city.trim() && a.state.trim();
+  const kb = useKeyboardInset();
 
   const field = (key, label, props = {}) => (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -2584,6 +2618,8 @@ function AddressSheet({ value, onSave, onClose }) {
       background: 'rgba(17,17,17,0.4)',
       display: 'flex', alignItems: 'flex-end',
       animation: 'fade-in .2s ease',
+      // Lift the sheet above the soft keyboard so its input + buttons stay visible.
+      paddingBottom: kb, transition: 'padding-bottom .2s ease',
     }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: '#fff',
@@ -2591,7 +2627,7 @@ function AddressSheet({ value, onSave, onClose }) {
         width: '100%',
         padding: '20px 20px 28px',
         animation: 'sheet-in .25s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        maxHeight: '88%', overflowY: 'auto',
+        maxHeight: `calc(100% - ${kb}px - 12px)`, overflowY: 'auto',
         boxSizing: 'border-box',
       }}>
         <div style={{
@@ -2642,6 +2678,7 @@ function BirthYearSheet({ value, onSave, onClose }) {
   const age = isComplete && inRange ? currentYear - parsed : null;
   const underAge = age !== null && age < 18;
   const canSave = isComplete && inRange && !underAge;
+  const kb = useKeyboardInset();
 
   return (
     <div style={{
@@ -2649,6 +2686,8 @@ function BirthYearSheet({ value, onSave, onClose }) {
       background: 'rgba(17,17,17,0.4)',
       display: 'flex', alignItems: 'flex-end',
       animation: 'fade-in .2s ease',
+      // Lift the sheet above the soft keyboard so its input + buttons stay visible.
+      paddingBottom: kb, transition: 'padding-bottom .2s ease',
     }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: '#fff',
@@ -2656,6 +2695,7 @@ function BirthYearSheet({ value, onSave, onClose }) {
         width: '100%',
         padding: '20px 20px 24px',
         animation: 'sheet-in .25s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        maxHeight: `calc(100% - ${kb}px - 12px)`, overflowY: 'auto',
         boxSizing: 'border-box',
       }}>
         <div style={{
@@ -2732,12 +2772,15 @@ function BirthYearSheet({ value, onSave, onClose }) {
 // Freeform notes sheet — anything else the user wants buyers to know.
 function NotesSheet({ value, onSave, onClose }) {
   const [text, setText] = React.useState(value || '');
+  const kb = useKeyboardInset();
   return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 60,
       background: 'rgba(17,17,17,0.4)',
       display: 'flex', alignItems: 'flex-end',
       animation: 'fade-in .2s ease',
+      // Lift the sheet above the soft keyboard so its input + buttons stay visible.
+      paddingBottom: kb, transition: 'padding-bottom .2s ease',
     }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: '#fff',
@@ -2745,6 +2788,7 @@ function NotesSheet({ value, onSave, onClose }) {
         width: '100%',
         padding: '20px 20px 24px',
         animation: 'sheet-in .25s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        maxHeight: `calc(100% - ${kb}px - 12px)`, overflowY: 'auto',
         boxSizing: 'border-box',
       }}>
         <div style={{
