@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280">
+  <rect width="720" height="1280" fill="#F4EDE3"/>
+  <ellipse cx="360" cy="1120" rx="240" ry="36" fill="#E3D8C8"/>
+  <!-- bottle -->
+  <rect x="330" y="150" width="60" height="60" rx="10" fill="#7A8B5C"/>
+  <rect x="318" y="196" width="84" height="40" rx="8" fill="#DDD3C2"/>
+  <path d="M300 236 C260 320 250 380 250 470 L250 1030 C250 1080 290 1110 360 1110 C430 1110 470 1080 470 1030 L470 470 C470 380 460 320 420 236 Z" fill="#C9DF8A"/>
+  <path d="M300 236 C260 320 250 380 250 470 L250 560 L470 560 L470 470 C470 380 460 320 420 236 Z" fill="#B7D273" opacity="0.6"/>
+  <!-- label -->
+  <rect x="250" y="560" width="220" height="330" fill="#FBF7EF"/>
+  <rect x="250" y="560" width="220" height="330" fill="none" stroke="#E0D6C4" stroke-width="2"/>
+  <text x="360" y="640" text-anchor="middle" font-family="Georgia, serif" font-size="44" font-weight="bold" fill="#3E4A2E">Harvest</text>
+  <text x="360" y="692" text-anchor="middle" font-family="Georgia, serif" font-size="44" font-weight="bold" fill="#3E4A2E">Sips</text>
+  <text x="360" y="742" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" letter-spacing="4" fill="#7A8B5C">GREEN APPLE</text>
+  <line x1="290" y1="770" x2="430" y2="770" stroke="#C9BFA9" stroke-width="2"/>
+  <text x="360" y="812" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#8A8272">Cold-pressed · No sugar added</text>
+  <text x="360" y="852" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#8A8272">12 fl oz · $3.99</text>
+  <!-- price flash -->
+  <circle cx="520" cy="330" r="78" fill="#3E4A2E"/>
+  <text x="520" y="318" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#F4EDE3">NEW</text>
+  <text x="520" y="356" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="bold" fill="#F4EDE3">$3.99</text>
+</svg>
