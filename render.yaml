@@ -34,3 +34,23 @@ services:
         sync: false # paste the Supabase connection string when Render prompts
       - key: JWT_SECRET
         generateValue: true
+      # ── Admin gate (hard launch blocker: admin fails CLOSED without it) ──
+      - key: ADMIN_API_TOKEN
+        generateValue: true # copy from Render dashboard into localStorage 'loopedin-admin-token' to use the admin console
+      # ── Messaging layer (Twilio SMS-first, WhatsApp-ready) ──
+      - key: TWILIO_ACCOUNT_SID
+        sync: false # from Twilio Console
+      - key: TWILIO_AUTH_TOKEN
+        sync: false # from Twilio Console (also signs webhook validation)
+      - key: TWILIO_SMS_FROM
+        sync: false # your toll-free number, E.164 e.g. +18885551234
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false # sandbox or approved WhatsApp sender, e.g. +14155238886
+      - key: WHATSAPP_ENABLED
+        value: "false" # flip to true when Meta approval lands
+      - key: MESSAGING_DAILY_CAP
+        value: "1" # max unsolicited outbound per member per day
+      - key: PUBLIC_API_URL
+        sync: false # this service's public URL, e.g. https://loopedin.onrender.com (webhook signature validation)
+      - key: PUBLIC_APP_URL
+        value: https://www.weloopedin.com # deep links in messages

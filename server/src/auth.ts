@@ -50,3 +50,22 @@ export function requireOrg(req: Request, res: Response, next: NextFunction) {
   req.principal = p;
   next();
 }
+
+// Staff gate for /api/admin/* — a hard launch blocker for the messaging layer.
+// Behavior:
+//   • ADMIN_API_TOKEN set        → require it (Bearer header or x-admin-token).
+//   • unset, NODE_ENV=production → FAIL CLOSED (503): admin is disabled until
+//     the token is configured. Never ship open admin routes.
+//   • unset, dev                 → open (preserves the local demo workflow).
+export function requireStaff(req: Request, res: Response, next: NextFunction) {
+  const expected = process.env.ADMIN_API_TOKEN;
+  if (!expected) {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(503).json({ error: 'admin disabled: ADMIN_API_TOKEN not configured' });
+    }
+    return next();
+  }
+  const provided = readToken(req) || (req.headers['x-admin-token'] as string | undefined) || '';
+  if (provided !== expected) return res.status(403).json({ error: 'staff auth required' });
+  next();
+}

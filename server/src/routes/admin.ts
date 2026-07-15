@@ -1,10 +1,14 @@
 import { Router } from 'express';
 import { prisma } from '../db.js';
+import { requireStaff } from '../auth.js';
+import { fanOutQuestion } from '../messaging/scheduler.js';
 
 export const adminRouter = Router();
 
-// NOTE: In this demo the admin console is open. A production deployment would
-// gate these routes behind a staff role / separate credential.
+// Staff-gated: requires ADMIN_API_TOKEN (Bearer or x-admin-token header).
+// In production with no token configured these routes fail CLOSED; in local
+// dev with no token they stay open so the demo workflow keeps working.
+adminRouter.use(requireStaff);
 
 // The review queue — every question awaiting approval.
 adminRouter.get('/queue', async (_req, res) => {
@@ -43,6 +47,9 @@ adminRouter.post('/questions/:id/review', async (req, res) => {
       where: { id: q.id },
       data: { status: 'live', feed: 'browse' },
     });
+    // Fan the newly-live question out over messaging (respects targeting,
+    // opt-out, and the daily cap). Fire-and-forget — approval never blocks.
+    fanOutQuestion(q.id).catch((e) => console.error('fan-out failed', e));
   } else if (action === 'reject') {
     const refund = q.points * q.target;
     await prisma.question.update({ where: { id: q.id }, data: { status: 'rejected' } });

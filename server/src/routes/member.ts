@@ -1,6 +1,9 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { prisma } from '../db.js';
 import { signToken, requireMember } from '../auth.js';
+import { preferredChannel, sendMessage } from '../messaging/router.js';
+import { templates } from '../messaging/templates.js';
 
 export const memberRouter = Router();
 
@@ -41,6 +44,62 @@ memberRouter.post('/register', async (req, res) => {
     create: { email: email.toLowerCase().trim(), phone: phone ?? null },
     update: { phone: phone ?? undefined },
   });
+  const token = signToken({ kind: 'member', id: member.id });
+  res.json({ token, member: await serializeMember(member.id) });
+});
+
+// ── Phone + one-time-code login (for members who signed up over messaging) ──
+// The OTP is stored on the phone's ConversationState (hashed) with a 10-minute
+// expiry; the code is delivered over the member's preferred channel.
+
+function normalizePhone(raw: string): string | null {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`; // US default
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (digits.length >= 8 && String(raw).trim().startsWith('+')) return `+${digits}`;
+  return null;
+}
+
+const hashOtp = (code: string) => crypto.createHash('sha256').update(code).digest('hex');
+
+memberRouter.post('/otp/request', async (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  if (!phone) return res.status(400).json({ error: 'valid phone required' });
+  const member = await prisma.member.findUnique({ where: { phone } });
+  // Do not reveal whether a phone exists — always claim success.
+  if (member) {
+    const code = String(crypto.randomInt(100000, 1000000));
+    const st = await prisma.conversationState.upsert({
+      where: { phone },
+      create: { phone, memberId: member.id },
+      update: {},
+    });
+    const ctx = (() => { try { return JSON.parse(st.context || '{}'); } catch { return {}; } })();
+    ctx.otp = { hash: hashOtp(code), exp: Date.now() + 10 * 60 * 1000, tries: 0 };
+    await prisma.conversationState.update({ where: { phone }, data: { context: JSON.stringify(ctx) } });
+    await sendMessage(phone, await preferredChannel(phone), templates.otp(code));
+  }
+  res.json({ ok: true });
+});
+
+memberRouter.post('/otp/verify', async (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  const code = String(req.body?.code || '').trim();
+  if (!phone || !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'phone and 6-digit code required' });
+  const st = await prisma.conversationState.findUnique({ where: { phone } });
+  const ctx = (() => { try { return JSON.parse(st?.context || '{}'); } catch { return {}; } })();
+  const otp = ctx.otp;
+  const fail = () => res.status(401).json({ error: 'invalid or expired code' });
+  if (!st || !otp?.hash || Date.now() > otp.exp || (otp.tries || 0) >= 5) return fail();
+  if (hashOtp(code) !== otp.hash) {
+    ctx.otp.tries = (otp.tries || 0) + 1;
+    await prisma.conversationState.update({ where: { phone }, data: { context: JSON.stringify(ctx) } });
+    return fail();
+  }
+  delete ctx.otp; // single use
+  await prisma.conversationState.update({ where: { phone }, data: { context: JSON.stringify(ctx) } });
+  const member = await prisma.member.findUnique({ where: { phone } });
+  if (!member) return fail();
   const token = signToken({ kind: 'member', id: member.id });
   res.json({ token, member: await serializeMember(member.id) });
 });

@@ -35,6 +35,16 @@ async function request<T = any>(
     const t = getToken(kind);
     if (t) headers.authorization = `Bearer ${t}`;
   }
+  // Admin routes are staff-gated server-side (ADMIN_API_TOKEN). Staff paste
+  // their token into localStorage once; demo/dev servers stay open without it.
+  if (path.startsWith('/admin')) {
+    try {
+      const admin = localStorage.getItem('loopedin-admin-token');
+      if (admin) headers['x-admin-token'] = admin;
+    } catch {
+      /* ignore */
+    }
+  }
   const res = await fetch(BASE + path, {
     method,
     headers,
@@ -65,6 +75,10 @@ export const memberApi = {
     request('member', 'POST', '/member/answers', { questionId, text, mode, attrs }),
   saveProfile: (profile: any, qualifiedFor?: any, streak?: number) =>
     request('member', 'PATCH', '/member/profile', { profile, qualifiedFor, streak }),
+  // Phone + one-time-code login for members who signed up over SMS/WhatsApp.
+  otpRequest: (phone: string) => request(null, 'POST', '/member/otp/request', { phone }),
+  otpVerify: (phone: string, code: string) =>
+    request(null, 'POST', '/member/otp/verify', { phone, code }),
 };
 
 // ── Org ───────────────────────────────────────────────────────────────────
