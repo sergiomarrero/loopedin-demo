@@ -12,18 +12,23 @@ datasource db {
 }
 
 // A respondent ("member"). Identified by email + phone (anonymous, no password).
+// Members can also originate over messaging (SMS/WhatsApp) with phone as the
+// join key — email is then a placeholder derived from the phone number.
 model Member {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  phone        String?
-  cents        Int      @default(0) // wallet balance, in cents (shown as points, 1c = 1pt)
-  pendingCents Int      @default(0) // earned-but-unclaimed escrow
-  streak       Int      @default(7)
-  profile      String   @default("{}") // JSON blob mirroring the profile schema
-  qualifiedFor String   @default("{}") // JSON map of lived-experience tags confirmed
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  email         String   @unique
+  phone         String?  @unique // E.164; join key for the messaging layer
+  phoneVerified Boolean  @default(false) // true when signup happened over messaging
+  signupChannel String? // 'app' | 'sms' | 'whatsapp'
+  cents         Int      @default(0) // wallet balance, in cents (shown as points, 1c = 1pt)
+  pendingCents  Int      @default(0) // earned-but-unclaimed escrow
+  streak        Int      @default(7)
+  profile       String   @default("{}") // JSON blob mirroring the profile schema
+  qualifiedFor  String   @default("{}") // JSON map of lived-experience tags confirmed
+  createdAt     DateTime @default(now())
 
-  answers Answer[]
+  answers     Answer[]
+  messageLogs MessageLog[]
 }
 
 // A buyer organization. Identified by email + phone (matches the free-plan flow).
@@ -56,6 +61,7 @@ model Question {
   buyerType String?
   trial     Boolean  @default(false)
   qualifier String? // JSON { tag, label } or null
+  review    String? // JSON { media: [...], reactions: [...] } or null — product-review questions
 
   // org-campaign economics
   points     Int     @default(0) // points per response
@@ -83,12 +89,50 @@ model Answer {
   member     Member   @relation(fields: [memberId], references: [id])
   text       String?
   mode       String   @default("text")
+  channel    String   @default("app") // 'app' | 'sms' | 'whatsapp' — answer source
   cents      Int      @default(0)
   attrs      String   @default("[]") // JSON array of anonymized profile attrs
   flagged    Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   @@unique([questionId, memberId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Messaging layer (SMS-first, WhatsApp-ready). See server/src/messaging/*.
+// Phone numbers live ONLY here and on Member — never exposed to org routes/Vox.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Every inbound/outbound message, for compliance (consent record) + debugging.
+model MessageLog {
+  id          String   @id @default(cuid())
+  memberId    String?
+  member      Member?  @relation(fields: [memberId], references: [id])
+  channel     String // 'sms' | 'whatsapp'
+  direction   String // 'inbound' | 'outbound'
+  body        String
+  mediaUrl    String?
+  questionId  String?
+  templateKey String? // which template was sent, for outbound
+  twilioSid   String?  @unique
+  status      String? // queued|sent|delivered|failed|received
+  createdAt   DateTime @default(now())
+
+  @@index([memberId, createdAt])
+}
+
+// One row per phone number: where they are in the conversation state machine.
+model ConversationState {
+  id            String    @id @default(cuid())
+  phone         String    @unique // E.164, join key
+  memberId      String?   @unique
+  channel       String    @default("sms")
+  flow          String    @default("idle") // 'idle' | 'signup' | 'answering' | 'profile_drip' | 'qualifier'
+  step          String? // flow-specific step key
+  context       String    @default("{}") // JSON: { qid, tag, profileField, retries, otp, ... }
+  optedOut      Boolean   @default(false)
+  lastInboundAt DateTime?
+  updatedAt     DateTime  @updatedAt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

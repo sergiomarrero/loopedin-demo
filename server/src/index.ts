@@ -7,6 +7,8 @@ import { memberRouter } from './routes/member.js';
 import { orgRouter } from './routes/org.js';
 import { adminRouter } from './routes/admin.js';
 import { voxRouter } from './routes/vox.js';
+import { twilioRouter } from './routes/twilio.js';
+import { startScheduler } from './messaging/scheduler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,6 +21,8 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/member', memberRouter);
 app.use('/api/org', orgRouter);
 app.use('/api/admin', adminRouter);
+// Messaging layer webhooks (SMS/WhatsApp via Twilio) — see src/messaging/*.
+app.use('/api/twilio', twilioRouter);
 // LoopedIn Vox — read-only insights layer (internal/org/export). Additive; does
 // not touch the routes above. See server/src/routes/vox.ts.
 app.use('/api/vox', voxRouter);
@@ -45,4 +49,5 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {
   console.log(`LoopedIn API listening on http://localhost:${PORT}`);
+  startScheduler();
 });
