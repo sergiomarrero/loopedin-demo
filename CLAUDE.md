@@ -77,8 +77,12 @@ These are product/legal requirements from the brief, not stylistic preferences:
   server targets it via `server/prisma/schema.postgres.prisma` (keep in sync with the
   sqlite dev schema). The researcher console now lives at **loopedin.rbl1.com** (repo
   `loopedin-research`); `/researcher` here redirects there.
-- **Password gate:** whole site is gated by `middleware.ts` via the **`SITE_PASSWORD`**
-  env var (set in Vercel). If the env var is unset, the gate is OFF (won't brick prod).
+- **Password gate:** whole site is gated by `middleware.ts` — a branded "Private Preview"
+  card (same UX as `rbl1.com/studio.html`), enforced server-side at the edge. Unlocking
+  sets an HttpOnly `loopedin_access` cookie for 30 days. **`SITE_PASSWORD`** (Vercel env)
+  overrides the password; with no env var it falls back to the shared demo password,
+  stored in-repo only as a SHA-256 digest — obfuscation, not secrecy, since this repo is
+  public. The gate is never silently OFF.
 - **Security headers** live in `vercel.json` (HSTS, nosniff, X-Frame-Options, Referrer-Policy, Permissions-Policy, CSP — CSP tested at 0 violations; keep `style-src 'unsafe-inline'` for the apps' inline styles).
 - DNS at Squarespace: `A @ 76.76.21.21`, `CNAME www cname.vercel-dns.com`; email locked (SPF/DKIM/DMARC).
 
