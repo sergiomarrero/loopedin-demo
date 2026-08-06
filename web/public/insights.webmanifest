@@ -1,0 +1,14 @@
+{
+  "name": "LoopedIn Insights Demo",
+  "short_name": "Insights Demo",
+  "description": "Standalone offline demo of the LoopedIn Vox insights dashboard — runs with no network.",
+  "start_url": "/insights",
+  "scope": "/insights",
+  "display": "standalone",
+  "background_color": "#0e1116",
+  "theme_color": "#0e1116",
+  "icons": [
+    { "src": "/vox/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/vox/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

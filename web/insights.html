@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <title>LoopedIn Insights Demo — offline</title>
+  <meta name="description" content="Standalone offline demo of the LoopedIn Vox insights dashboard. Runs with no network." />
+  <meta name="author" content="Rebel One (RBL1)" />
+  <meta name="theme-color" content="#0e1116" />
+  <meta name="robots" content="noindex, nofollow" />
+
+  <link rel="icon" type="image/svg+xml" href="/vox/favicon.svg" />
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="/vox/favicon-32.png" />
+  <link rel="alternate icon" type="image/png" sizes="96x96" href="/vox/favicon-96.png" />
+  <link rel="mask-icon" href="/vox/favicon.svg" color="#58a6ff" />
+
+  <!-- Its own manifest + home-screen identity, so this installs as a separate
+       app from the member demo and the real member app. iOS takes the
+       home-screen icon from apple-touch-icon, so that one matters most here. -->
+  <link rel="manifest" href="/insights.webmanifest" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/vox/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Insights Demo" />
+
+  <script type="module" src="/src/vox/demo-main.tsx"></script>
+</head>
+<body>
+<div id="root"></div>
+</body>
+</html>

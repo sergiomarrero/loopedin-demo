@@ -31,20 +31,22 @@ function walk(dir) {
 
 const all = walk(DIST).map((p) => '/' + relative(DIST, p).split(/[\\/]/).join('/'));
 
-// Assets shared by both builds. Note we take the WHOLE assets/ dir rather than
-// parsing the HTML: both entries reach their main chunk through a *dynamic*
-// import, so that chunk appears in no <script> tag and an HTML scan would miss
-// it and break offline. dist is well under a megabyte — over-including is free
-// insurance.
-const shared = all.filter(
+// Every hashed JS/CSS chunk. We take the WHOLE assets/ dir rather than parsing
+// the HTML: entries reach their main chunk through a *dynamic* import, so that
+// chunk appears in no <script> tag and an HTML scan would miss it and break
+// offline. dist is well under a megabyte — over-including is free insurance.
+const chunks = all.filter((u) => u.startsWith('/assets/'));
+
+// Per-app static assets on top of the chunks.
+const memberAssets = all.filter(
   (u) =>
-    u.startsWith('/assets/') ||
     u === '/inter.woff2' ||
     u === '/apple-touch-icon.png' ||
     u === '/icon-192.png' ||
     u === '/icon-512.png' ||
     u.startsWith('/review/'),
 );
+const insightsAssets = all.filter((u) => u === '/inter.woff2' || u.startsWith('/vox/'));
 
 const template = readFileSync(TEMPLATE, 'utf8');
 const MARKER = /\/\* __SW_BUILD__ \*\/[\s\S]*?\/\* __SW_BUILD_END__ \*\//;
@@ -53,9 +55,9 @@ if (!MARKER.test(template)) {
   process.exit(1);
 }
 
-function emit({ outFile, cachePrefix, shellUrl, shellFile, manifest }) {
+function emit({ outFile, cachePrefix, shellUrl, shellFile, manifest, assets }) {
   // The clean URL is what the manifest's start_url and the home-screen icon open.
-  const precache = [shellUrl, shellFile, manifest, ...shared];
+  const precache = [shellUrl, shellFile, manifest, ...chunks, ...assets];
 
   const h = createHash('sha256');
   h.update(cachePrefix);
@@ -87,6 +89,7 @@ emit({
   shellUrl: '/member',
   shellFile: '/member.html',
   manifest: '/manifest.webmanifest',
+  assets: memberAssets,
 });
 
 emit({
@@ -95,4 +98,14 @@ emit({
   shellUrl: '/demo',
   shellFile: '/demo.html',
   manifest: '/demo.webmanifest',
+  assets: memberAssets,
+});
+
+emit({
+  outFile: 'sw-insights.js',
+  cachePrefix: 'loopedin-insights',
+  shellUrl: '/insights',
+  shellFile: '/insights.html',
+  manifest: '/insights.webmanifest',
+  assets: insightsAssets,
 });
