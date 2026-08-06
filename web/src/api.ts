@@ -24,12 +24,23 @@ export function setToken(kind: 'member' | 'org', token: string | null) {
   }
 }
 
+// The standalone offline demo (/demo) is HERMETIC: it must never touch the
+// network, so it can't be affected by backend deploys, outages, or the real
+// app switching to live data. Every caller already try/catches this and falls
+// back to seed data + localStorage, so rejecting here is the whole mechanism.
+function isDemoBuild(): boolean {
+  return typeof window !== 'undefined' && (window as any).__LOOPEDIN_DEMO__ === true;
+}
+
 async function request<T = any>(
   kind: 'member' | 'org' | null,
   method: string,
   path: string,
   body?: any,
 ): Promise<T> {
+  if (isDemoBuild()) {
+    throw new Error('demo build: offline by design, no network calls');
+  }
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (kind) {
     const t = getToken(kind);

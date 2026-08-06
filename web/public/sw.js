@@ -1,14 +1,19 @@
-/* LoopedIn member app — service worker.
+/* LoopedIn service worker — TEMPLATE.
  *
- * Purpose: make https://www.weloopedin.com/member work with NO network, so the
- * demo runs from an iPad home-screen icon in airplane mode. The app already
- * carries all of its data (seed questions in the bundle + localStorage), so the
- * only thing standing between it and offline was that Safari still had to fetch
- * the HTML/JS/CSS. This caches that shell.
+ * This one file is stamped into TWO workers at build time by
+ * web/scripts/build-sw.mjs:
  *
- * The PRECACHE list below is GENERATED AT BUILD TIME by web/scripts/build-sw.mjs
- * — Vite content-hashes asset filenames, so a hand-written list would silently
- * rot on the next build and break offline without anyone noticing.
+ *   dist/sw.js       → the real member app  (scope "/",     shell /member)
+ *   dist/sw-demo.js  → the standalone demo  (scope "/demo", shell /demo)
+ *
+ * Purpose: make the app work with NO network, so it runs from an iPad
+ * home-screen icon in airplane mode. The app already carries its own data (seed
+ * questions in the bundle + localStorage), so once this shell is cached there is
+ * nothing left to fetch.
+ *
+ * The PRECACHE list is GENERATED — Vite content-hashes asset filenames, so a
+ * hand-written list would silently rot on the next build and break offline with
+ * nothing failing loudly.
  *
  * Gotchas this deliberately handles:
  *  • The site sits behind an edge password gate. Caching the gate's HTML as the
@@ -16,17 +21,22 @@
  *    so gate responses are never cached (they carry x-loopedin-gate).
  *  • Never cache redirected / opaque / non-OK responses (a login redirect
  *    poisons the shell the same way).
+ *  • The two workers share an origin, so activate() only ever purges caches
+ *    carrying ITS OWN prefix — otherwise installing one would wipe the other's
+ *    offline data.
  *  • skipWaiting + clients.claim + a versioned cache name, or an updated worker
  *    never actually lands on a device that already installed the old one.
  */
 
 /* __SW_BUILD__ */
 const VERSION = 'dev';
+const CACHE_PREFIX = 'loopedin-member';
+const SHELL_URL = '/member';
+const SHELL_FILE = '/member.html';
 const PRECACHE = [];
 /* __SW_BUILD_END__ */
 
-const CACHE = `loopedin-member-${VERSION}`;
-const SHELL_URL = '/member';
+const CACHE = `${CACHE_PREFIX}-${VERSION}`;
 
 // Requests the worker must never touch or cache.
 const isApi = (u) => u.pathname.startsWith('/api/');
@@ -64,7 +74,10 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     (async () => {
-      for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k);
+      // Purge only OUR old versions — the sibling worker's cache must survive.
+      for (const k of await caches.keys()) {
+        if (k.startsWith(CACHE_PREFIX + '-') && k !== CACHE) await caches.delete(k);
+      }
       await self.clients.claim();
     })(),
   );
@@ -87,12 +100,12 @@ self.addEventListener('fetch', (e) => {
           if (isCacheable(net)) (await caches.open(CACHE)).put(req, net.clone());
           return net;
         } catch {
-          // Offline. Serve this exact page if we have it, else the member shell.
+          // Offline. Serve this exact page if we have it, else our shell.
           const c = await caches.open(CACHE);
           return (
             (await c.match(req, { ignoreSearch: true })) ||
             (await c.match(SHELL_URL)) ||
-            (await c.match('/member.html')) ||
+            (await c.match(SHELL_FILE)) ||
             new Response('Offline — open this app once while connected.', {
               status: 503,
               headers: { 'content-type': 'text/plain' },

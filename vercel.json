@@ -9,11 +9,20 @@
       "destination": "/member.html"
     },
     {
+      "source": "/demo",
+      "destination": "/demo.html"
+    },
+    {
       "source": "/privacy",
       "destination": "/privacy.html"
     }
   ],
   "redirects": [
+    {
+      "source": "/demo.html",
+      "destination": "/demo",
+      "permanent": true
+    },
     {
       "source": "/member.html",
       "destination": "/member",
