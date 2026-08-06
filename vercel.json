@@ -15,9 +15,18 @@
     {
       "source": "/privacy",
       "destination": "/privacy.html"
+    },
+    {
+      "source": "/insights",
+      "destination": "/insights.html"
     }
   ],
   "redirects": [
+    {
+      "source": "/insights.html",
+      "destination": "/insights",
+      "permanent": true
+    },
     {
       "source": "/demo.html",
       "destination": "/demo",

@@ -21,6 +21,7 @@ export default defineConfig({
         index: resolve(__dirname, 'index.html'),
         member: resolve(__dirname, 'member.html'),
         demo: resolve(__dirname, 'demo.html'),
+        insights: resolve(__dirname, 'insights.html'),
         orgs: resolve(__dirname, 'orgs.html'),
         vox: resolve(__dirname, 'vox.html'),
       },
