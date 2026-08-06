@@ -20,6 +20,7 @@ export default defineConfig({
       input: {
         index: resolve(__dirname, 'index.html'),
         member: resolve(__dirname, 'member.html'),
+        demo: resolve(__dirname, 'demo.html'),
         orgs: resolve(__dirname, 'orgs.html'),
         vox: resolve(__dirname, 'vox.html'),
       },

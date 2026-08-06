@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMzAgMTAwIj4KICA8ZyBmaWxsPSIjZTg1MzBlIj4KICAgIDxjaXJjbGUgY3g9IjI3IiBjeT0iMjEiIHI9IjEzIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzYiIGN5PSI2MyIgcng9IjE3IiByeT0iMjMiIHRyYW5zZm9ybT0icm90YXRlKC0yMCAzNiA2MykiLz4KICAgIDxjaXJjbGUgY3g9IjY1IiBjeT0iMTgiIHI9IjE0Ii8+CiAgICA8ZWxsaXBzZSBjeD0iNjUiIGN5PSI2NCIgcng9IjIwIiByeT0iMjciLz4KICAgIDxjaXJjbGUgY3g9IjEwMiIgY3k9IjIxIiByPSIxMiIvPgogICAgPGVsbGlwc2UgY3g9IjEwMiIgY3k9IjYzIiByeD0iMTciIHJ5PSIyMyIgdHJhbnNmb3JtPSJyb3RhdGUoOCAxMDIgNjMpIi8+CiAgPC9nPgo8L3N2Zz4=" />
+  <title>LoopedIn Demo — offline</title>
+  <meta name="description" content="Standalone offline demo of the LoopedIn member app. Runs with no network." />
+  <meta name="theme-color" content="#e8530e" />
+  <meta name="robots" content="noindex, nofollow" />
+  <!-- Its own manifest, so installing the demo and installing the real member
+       app give you two separate icons with separate storage on the device. -->
+  <link rel="manifest" href="/demo.webmanifest" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="LoopedIn Demo" />
+  <script type="module" src="/src/member/demo-main.tsx"></script>
+</head>
+<body>
+<div class="stage">
+  <div class="stage-caption">
+    <span class="dot"></span>
+    <span>LoopedIn · Offline Demo</span>
+    <a class="by" href="https://www.rbl1.com" target="_blank" rel="noopener noreferrer">By RBL1</a>
+  </div>
+
+  <div id="app"></div>
+
+  <div class="legend">
+    Standalone demo — runs entirely on this device, no network required.<br>
+    Tap to navigate. Use the menu (top-left) to jump between screens.
+  </div>
+</div>
+
+<div id="demo-menu-root"></div>
+</body>
+</html>

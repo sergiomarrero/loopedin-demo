@@ -3695,7 +3695,12 @@ function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
 // ===== source: 25602658 =====
 // Pulse — orchestrator. Owns app state, screen routing, modals, points animation.
 
-const STORAGE_KEY = 'pulse-respondent-state-v1';
+// The standalone offline demo (/demo) keeps its own state, so presenting never
+// disturbs — and is never disturbed by — the real member app on the same origin.
+const STORAGE_KEY =
+  typeof window !== 'undefined' && (window as any).__LOOPEDIN_DEMO__
+    ? 'pulse-demo-state-v1'
+    : 'pulse-respondent-state-v1';
 
 const INITIAL_STATE = {
   screen: 'onboarding',       // onboarding | feed | answer | claim | wallet | profile | streaks
