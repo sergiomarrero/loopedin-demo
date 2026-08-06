@@ -1,6 +1,20 @@
 import '../styles/tokens.css';
 import '../styles/member.css';
 
+// Offline support: register the service worker that caches the app shell, so
+// the demo runs from the iPad home-screen icon with no network (airplane mode).
+// The app's data already lives in the bundle + localStorage, so once the shell
+// is cached there is nothing left to fetch. Registration is best-effort and
+// silent — a failure here must never block the app from rendering.
+// Requires a secure context (https, or localhost); http previews just skip it.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+      /* unsupported / blocked / private mode — app still works online */
+    });
+  });
+}
+
 // On each load, drop the respondent back to the onboarding screen (demo behavior
 // carried over from the prototype) — keeps wallet/answers but resets the route.
 (function () {

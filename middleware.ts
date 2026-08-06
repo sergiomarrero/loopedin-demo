@@ -209,6 +209,10 @@ function gatePage({ error, next }: { error: boolean; next: string }) {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store, must-revalidate',
+      // Lets the member app's service worker recognise the gate and refuse to
+      // cache it. Without this it could store this page as the offline app
+      // shell and strand you at a password prompt in airplane mode.
+      'x-loopedin-gate': '1',
     },
   });
 }
