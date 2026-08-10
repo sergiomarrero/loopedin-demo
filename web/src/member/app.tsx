@@ -3536,10 +3536,13 @@ function OnboardingScreen({ navigate, onPickFirst }) {
         </div>
       </div>
 
-      {/* Swipeable card deck — drag the top card: left to skip, right to answer. */}
+      {/* Swipeable card deck — drag the top card: left to skip, right to answer.
+          Full-bleed left-to-right: the deck takes the whole width so the card
+          you're flicking through is the widest thing on screen. The headline
+          and buttons keep their 22px gutters. */}
       <div style={{
         position: 'relative',
-        margin: '16px 22px 6px',
+        margin: '16px 0 6px',
         flex: 1,
         minHeight: 300,
       }}>
