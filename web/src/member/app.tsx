@@ -3260,7 +3260,9 @@ function NotesSheet({ value, onSave, onClose }) {
             width: '100%', boxSizing: 'border-box',
             border: `1px solid ${BORDER_2}`, background: '#fff',
             borderRadius: 12, padding: '12px 14px',
-            fontFamily: 'inherit', fontSize: 15, lineHeight: 1.5, color: INK,
+            // 16px minimum — anything smaller makes iOS Safari zoom the page
+            // in on focus and stay zoomed after, cropping the whole app.
+            fontFamily: 'inherit', fontSize: 16, lineHeight: 1.5, color: INK,
             outline: 'none', resize: 'vertical', minHeight: 130,
           }}
         />
