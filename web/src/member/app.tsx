@@ -1555,7 +1555,7 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
   }, []);
 
   // Qualifier prompt — show if it's a Browse question with a qualifier and user hasn't confirmed
-  const needsQualifier = q.qualifier && !state.tags.includes(q.qualifier.tag);
+  const needsQualifier = q.qualifier && !(state.qualifiedFor || {})[q.qualifier.tag];
   const [qualConfirmed, setQualConfirmed] = React.useState(!needsQualifier);
   const [qualAnswer, setQualAnswer] = React.useState(null); // 'yes' | 'no'
 
@@ -1572,6 +1572,7 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
       mode,
       text: mode === 'text' ? text.trim() : null,
       addTag: qualAnswer === 'yes' ? q.qualifier?.tag : null,
+      qualifies: qualAnswer === 'yes',
     });
   };
 
