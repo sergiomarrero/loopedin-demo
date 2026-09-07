@@ -4201,7 +4201,7 @@ function FlowIntro({ count, onStart, onExit }) {
       boxSizing: 'border-box',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Eyebrow tone="glass">New · Flow mode</Eyebrow>
+        <Eyebrow tone="glass">Flow mode</Eyebrow>
         <button onClick={onExit} aria-label="Close" style={{
           width: 40, height: 40, borderRadius: '50%',
           background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.18)',
@@ -4454,19 +4454,16 @@ function FlowCard({ count, onStart }) {
       background: INK, color: '#fff', borderRadius: 16,
       padding: '18px 18px 16px', display: 'flex', flexDirection: 'column', gap: 12,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <Eyebrow tone="glass">New · Flow mode</Eyebrow>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 600, letterSpacing: 0.2, whiteSpace: 'nowrap' }}>
-          {count} {count === 1 ? 'question' : 'questions'} · about {mins} min
-        </span>
-      </div>
       <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15 }}>
         Just talk. Flick up for the next one.
       </div>
       <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', lineHeight: 1.5 }}>
         The mic is already listening when a question comes up. Say your answer, flick up, and the next one's there — hands-free.
       </div>
-      <PButton onClick={onStart} style={{ marginTop: 2 }}>Start flow mode →</PButton>
+      <PButton onClick={onStart} style={{ marginTop: 2 }}>Flow mode →</PButton>
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', textAlign: 'center', letterSpacing: 0.2 }}>
+        {count} {count === 1 ? 'question' : 'questions'} · about {mins} min · anonymous
+      </div>
     </div>
   );
 }
