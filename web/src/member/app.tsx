@@ -794,6 +794,8 @@ function Eyebrow({ children, tone = 'green', style = {} }) {
     ink:    { bg: INK,          fg: '#fff', bd: INK },
     line:   { bg: 'transparent',fg: INK_3, bd: BORDER_2 },
     danger: { bg: DANGER_TINT,  fg: DANGER, bd: '#F0C9C2' },
+    // On dark (ink) surfaces — Flow mode and the Flow card.
+    glass:  { bg: 'rgba(255,255,255,0.14)', fg: '#fff', bd: 'rgba(255,255,255,0.22)' },
   };
   const t = tones[tone] || tones.green;
   return (
@@ -1418,6 +1420,11 @@ function FeedScreen({ state, navigate, openAnswer }) {
           }}>
             <strong style={{ color: PRIMARY_DARK }}>Heads up.</strong> Browse questions target specific lived experiences. If you answer one, we'll ask if it applies — honest answers keep results trustworthy.
           </div>
+        )}
+
+        {/* Flow mode — hands-free, reels-style answering (behind __LOOPEDIN_FLOW__). */}
+        {FLOW_ENABLED && tab === 'foryou' && visible.length > 0 && (
+          <FlowCard count={visible.length} onStart={() => navigate('flow')} />
         )}
 
         {visible.length === 0 && !browseLocked && (
@@ -3581,6 +3588,13 @@ function OnboardingScreen({ navigate, onPickFirst }) {
             Answer & Earn {top?.cents || 0} pts
           </PButton>
         </div>
+        {FLOW_ENABLED && (
+          <button onClick={() => navigate('flow')} style={{
+            background: 'transparent', border: 0, padding: '2px 0 0',
+            fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: PRIMARY_DARK,
+            letterSpacing: -0.1, cursor: 'pointer', textAlign: 'center',
+          }}>Prefer to just talk? Try Flow mode →</button>
+        )}
         <div style={{
           textAlign: 'center', fontSize: 12, color: INK_4, letterSpacing: 0.1,
           paddingTop: 2,
@@ -3698,15 +3712,777 @@ function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
 
 
 
+// ===== Flow mode — reels-style, hands-free answering =====
+// The Instagram Reels / YouTube Shorts grammar applied to answering: one
+// question fills the screen, the mic is already listening when it appears, and
+// a flick up sends what you said and pulls in the next one. No submit button,
+// no mode chooser — talk, flick, repeat. Tap to pause, flick down to go back.
+//
+// Ships behind __LOOPEDIN_FLOW__ (the /flow demo entry) so the live member app
+// and the offline demo are untouched until the mode is approved.
+
+const FLOW_ENABLED = typeof window !== 'undefined' && !!(window as any).__LOOPEDIN_FLOW__;
+
+// Live captions come from the Web Speech API where the browser has it (Safari on
+// iPhone/iPad, Chrome). Elsewhere we fall back to a plain MediaRecorder capture
+// so the answer is still recorded — the UI just says "recording" instead of
+// showing the words. Audio stays on-device (demo: no upload yet).
+function getSpeechRecognition() {
+  if (typeof window === 'undefined') return null;
+  return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
+}
+
+// One capture session at a time — the pager restarts it per question.
+//   status: idle | listening | paused | denied | error
+//   captions: true when words are coming from speech recognition
+function useFlowCapture() {
+  const [status, setStatus] = React.useState('idle');
+  const [captions, setCaptions] = React.useState(() => !!getSpeechRecognition());
+  const [finalText, setFinalText] = React.useState('');
+  const [interimText, setInterimText] = React.useState('');
+  const [seconds, setSeconds] = React.useState(0);
+
+  const recRef = React.useRef(null);      // current SpeechRecognition instance
+  const baseRef = React.useRef('');       // words banked from instances that already ended
+  const mrRef = React.useRef(null);       // MediaRecorder fallback
+  const streamRef = React.useRef(null);
+  const activeRef = React.useRef(false);  // should we be capturing right now?
+  const pausedRef = React.useRef(false);
+  const captionsRef = React.useRef(captions);
+  const snapRef = React.useRef({ final: '', interim: '' });
+  const secRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (status !== 'listening') return;
+    const t = setInterval(() => { secRef.current += 1; setSeconds(secRef.current); }, 1000);
+    return () => clearInterval(t);
+  }, [status]);
+
+  const setTexts = (fin, inter) => {
+    snapRef.current = { final: fin, interim: inter };
+    setFinalText(fin);
+    setInterimText(inter);
+  };
+  const heardSoFar = () =>
+    (snapRef.current.final + ' ' + snapRef.current.interim).replace(/\s+/g, ' ').trim();
+
+  function teardownRecognizer() {
+    const r = recRef.current;
+    recRef.current = null;
+    if (r) {
+      r.onresult = null; r.onend = null; r.onerror = null;
+      try { r.abort(); } catch { /* already stopped */ }
+    }
+  }
+  function teardownRecorder() {
+    const mr = mrRef.current;
+    mrRef.current = null;
+    if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch { /* already stopped */ } }
+    (streamRef.current?.getTracks() || []).forEach(t => t.stop());
+    streamRef.current = null;
+  }
+
+  async function startRecorder() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!activeRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+      streamRef.current = stream;
+      const { mr } = makeAudioRecorder(stream);
+      mrRef.current = mr;
+      mr.start();
+      setStatus('listening');
+    } catch (err) {
+      setStatus(err && err.name === 'NotAllowedError' ? 'denied' : 'error');
+    }
+  }
+
+  function startRecognizer() {
+    const SR = getSpeechRecognition();
+    const r = new SR();
+    r.lang = (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
+    r.continuous = true;
+    r.interimResults = true;
+    r.onresult = (e) => {
+      // Rebuild from the full result list every time — simpler and more robust
+      // than tracking resultIndex across browsers.
+      let fin = '', inter = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const res = e.results[i];
+        const t = res[0] ? res[0].transcript : '';
+        if (res.isFinal) fin += t + ' '; else inter += t;
+      }
+      setTexts((baseRef.current + fin).replace(/\s+/g, ' ').trimStart(), inter.trim());
+    };
+    r.onerror = (e) => {
+      const code = e && e.error;
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        activeRef.current = false;
+        teardownRecognizer();
+        setStatus('denied');
+      } else if (code === 'network' || code === 'audio-capture') {
+        // No captions on this device/connection — keep the answer as audio.
+        teardownRecognizer();
+        captionsRef.current = false;
+        setCaptions(false);
+        if (activeRef.current) startRecorder();
+      }
+      // 'no-speech' / 'aborted' are followed by onend, which restarts us.
+    };
+    r.onend = () => {
+      if (recRef.current !== r) return; // superseded by a newer instance
+      // Recognizers stop themselves after a pause. Bank what this one heard
+      // and start a fresh one so we keep listening until the member flicks.
+      baseRef.current = heardSoFar() ? heardSoFar() + ' ' : '';
+      setTexts(baseRef.current.trimEnd(), '');
+      recRef.current = null;
+      if (activeRef.current && !pausedRef.current) {
+        setTimeout(() => {
+          if (activeRef.current && !pausedRef.current && !recRef.current) startRecognizer();
+        }, 120);
+      }
+    };
+    recRef.current = r;
+    try {
+      r.start();
+      setStatus('listening');
+    } catch {
+      // "already started" race right after an abort — try once more shortly.
+      setTimeout(() => {
+        if (activeRef.current && recRef.current === r) {
+          try { r.start(); setStatus('listening'); } catch { setStatus('error'); }
+        }
+      }, 250);
+    }
+  }
+
+  function start() {
+    activeRef.current = true;
+    pausedRef.current = false;
+    baseRef.current = '';
+    secRef.current = 0;
+    setSeconds(0);
+    setTexts('', '');
+    teardownRecognizer();
+    teardownRecorder();
+    if (captionsRef.current && getSpeechRecognition()) startRecognizer();
+    else startRecorder();
+  }
+  // Stop and hand back everything captured for this question.
+  function stop() {
+    const out = { text: heardSoFar(), seconds: secRef.current };
+    activeRef.current = false;
+    pausedRef.current = false;
+    teardownRecognizer();
+    teardownRecorder();
+    setStatus('idle');
+    return out;
+  }
+  function pause() {
+    if (!activeRef.current || status !== 'listening') return;
+    pausedRef.current = true;
+    if (mrRef.current) {
+      try { mrRef.current.pause(); } catch { /* ignore */ }
+    } else {
+      baseRef.current = heardSoFar() ? heardSoFar() + ' ' : '';
+      setTexts(baseRef.current.trimEnd(), '');
+      teardownRecognizer();
+    }
+    setStatus('paused');
+  }
+  function resume() {
+    if (!activeRef.current) return;
+    pausedRef.current = false;
+    if (mrRef.current) {
+      try { mrRef.current.resume(); } catch { /* ignore */ }
+      setStatus('listening');
+    } else {
+      startRecognizer();
+    }
+  }
+  function retry() {
+    start();
+  }
+
+  React.useEffect(() => () => { activeRef.current = false; teardownRecognizer(); teardownRecorder(); }, []);
+
+  return { status, captions, finalText, interimText, seconds, start, stop, pause, resume, retry };
+}
+
+const FLOW_FLICK = 88; // px of vertical drag past which a release commits
+
+function fmtClock(s) {
+  return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+}
+
+function FlowScreen({ state, onAnswer, onExit }) {
+  // Snapshot the deck at entry so answering doesn't reshuffle the slides
+  // underneath the member.
+  const queue = React.useMemo(
+    () => PULSE_QUESTIONS.filter(q => q.feed === 'foryou' && !state.answered[q.id]),
+    [],
+  );
+  const wasFirst = React.useRef(!state.hasAnsweredOnce);
+  const total = queue.length;
+
+  const [live, setLive] = React.useState(false);
+  const [idx, setIdx] = React.useState(0);
+  const [results, setResults] = React.useState({}); // idx → { kind: 'answered' | 'skipped', text, cents }
+  const [dragY, setDragY] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const [typing, setTyping] = React.useState(false);
+  const [typed, setTyped] = React.useState('');
+  const [toast, setToast] = React.useState(null); // { cents, key }
+  const capture = useFlowCapture();
+  const busyRef = React.useRef(false);
+
+  const atEnd = idx >= total;
+  const q = queue[idx];
+  const current = results[idx];
+  const answeredCount = Object.values(results).filter(r => r.kind === 'answered').length;
+  const skippedCount = Object.values(results).filter(r => r.kind === 'skipped').length;
+  const earned = Object.values(results).reduce((a, r) => a + (r.kind === 'answered' ? r.cents : 0), 0);
+
+  // What a release would do right now — shown as the drag cue and used on commit.
+  const pendingText = typing ? typed.trim() : (capture.finalText + ' ' + capture.interimText).trim();
+  const hasAnswer = !atEnd && current?.kind !== 'answered' &&
+    (pendingText.length >= 2 || (!capture.captions && capture.seconds >= 2));
+
+  function begin() {
+    setLive(true);
+    if (total > 0) capture.start(); // inside the tap — the mic prompt needs the gesture
+  }
+
+  function exit() {
+    capture.stop();
+    onExit({ earned, wasFirst: wasFirst.current });
+  }
+
+  // Leaving a slide commits it: said something → answered (points); silent → skipped.
+  function leaveCurrent() {
+    if (atEnd || current?.kind === 'answered') return;
+    const cap = capture.stop();
+    const text = typing ? typed.trim() : cap.text;
+    const has = text.length >= 2 || (!capture.captions && cap.seconds >= 2);
+    if (has) {
+      setResults(x => ({ ...x, [idx]: { kind: 'answered', text, cents: q.cents } }));
+      onAnswer({ qid: q.id, cents: q.cents, mode: typing ? 'text' : 'voice', text: text || null });
+      setToast({ cents: q.cents, key: Date.now() });
+      try { navigator.vibrate && navigator.vibrate(12); } catch { /* no haptics */ }
+    } else {
+      setResults(x => ({ ...x, [idx]: { kind: 'skipped', text: '', cents: 0 } }));
+    }
+  }
+
+  function goTo(next) {
+    if (busyRef.current) return;
+    if (next < 0 || next > total) { setDragY(0); return; }
+    busyRef.current = true;
+    leaveCurrent();
+    setIdx(next);
+    setDragY(0);
+    setTyping(false);
+    setTyped('');
+    // Skipped questions re-arm when revisited; answered ones are read-only.
+    if (next < total && results[next]?.kind !== 'answered') capture.start();
+    setTimeout(() => { busyRef.current = false; }, 320);
+  }
+  const goNext = () => goTo(idx + 1);
+  const goPrev = () => goTo(idx - 1);
+
+  // Tap = pause / resume, like tapping a reel pauses the video.
+  function onTap() {
+    if (atEnd || current?.kind === 'answered' || typing) return;
+    if (capture.status === 'listening') capture.pause();
+    else if (capture.status === 'paused') capture.resume();
+    else if (capture.status === 'error' || capture.status === 'denied') capture.retry();
+  }
+
+  // Drag follows the finger 1:1; release past the threshold (or a quick flick)
+  // commits. Listeners go on WINDOW so the gesture survives the finger leaving
+  // the slide — same pattern as the onboarding deck.
+  const ptr = React.useRef(null);
+  const onPointerDown = (e) => {
+    if (!live || busyRef.current) return;
+    if (e.target.closest && e.target.closest('button, textarea, a, [data-nodrag]')) return;
+    if (e.cancelable) e.preventDefault();
+    const now = performance.now();
+    ptr.current = { x0: e.clientX, y0: e.clientY, samples: [[now, e.clientY]] };
+    setDragging(true);
+    const move = (ev) => {
+      const p = ptr.current;
+      if (!p) return;
+      const dy = ev.clientY - p.y0;
+      p.samples.push([performance.now(), ev.clientY]);
+      if (p.samples.length > 6) p.samples.shift();
+      const edge = (dy > 0 && idx === 0) || (dy < 0 && atEnd);
+      setDragY(edge ? dy * 0.3 : dy); // rubber-band at either end
+    };
+    const up = (ev) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      const p = ptr.current;
+      ptr.current = null;
+      setDragging(false);
+      if (!p) return;
+      const dy = ev.clientY - p.y0, dx = ev.clientX - p.x0;
+      const [t1, y1] = p.samples[0];
+      const v = (ev.clientY - y1) / Math.max(1, performance.now() - t1); // px per ms
+      if (Math.abs(dy) < 6 && Math.abs(dx) < 6) { setDragY(0); onTap(); return; }
+      if (dy < -FLOW_FLICK || (v < -0.5 && dy < -24)) goNext();
+      else if (dy > FLOW_FLICK || (v > 0.5 && dy > 24)) goPrev();
+      else setDragY(0);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
+  // Trackpad / mouse wheel (laptop demo) — accumulate, trigger once, then lock
+  // out until the gesture settles.
+  const wheel = React.useRef({ sum: 0, t: 0, lock: 0 });
+  const onWheel = (e) => {
+    if (!live) return;
+    const w = wheel.current;
+    const now = performance.now();
+    if (now < w.lock) return;
+    if (now - w.t > 300) w.sum = 0;
+    w.t = now;
+    w.sum += e.deltaY;
+    // 60px: one mouse-wheel notch (Chrome reports 100, or 50 on a 2× display)
+    // is enough; a trackpad swipe gets there in a few events and the lockout
+    // stops its inertia tail from advancing twice.
+    if (w.sum > 60) { w.sum = 0; w.lock = now + 900; goNext(); }
+    else if (w.sum < -60) { w.sum = 0; w.lock = now + 900; goPrev(); }
+  };
+
+  // Keyboard (laptop demo): ↓ next, ↑ previous, space pause, esc exit.
+  React.useEffect(() => {
+    if (!live) return;
+    const onKey = (e) => {
+      if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return;
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') { e.preventDefault(); goNext(); }
+      else if (e.key === 'ArrowUp' || e.key === 'PageUp') { e.preventDefault(); goPrev(); }
+      else if (e.key === ' ') { e.preventDefault(); onTap(); }
+      else if (e.key === 'Escape') exit();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  if (!live) {
+    return <FlowIntro count={total} onStart={begin} onExit={() => onExit({ earned: 0, wasFirst: false })} />;
+  }
+
+  // Render the active slide and its neighbours only; they sit stacked
+  // vertically and the whole stack follows the drag.
+  const window_ = [];
+  for (let i = Math.max(0, idx - 1); i <= Math.min(total, idx + 1); i++) window_.push(i);
+  const slideStyle = (i) => ({
+    position: 'absolute', inset: 0,
+    transform: `translateY(calc(${(i - idx) * 100}% + ${dragY}px))`,
+    transition: dragging ? 'none' : 'transform .28s cubic-bezier(.2,.8,.2,1)',
+    willChange: 'transform',
+  });
+
+  const dragUp = dragY < -8, dragDown = dragY > 8;
+  const cueStrength = Math.min(1, Math.abs(dragY) / FLOW_FLICK);
+  const cue = dragUp
+    ? (atEnd ? null : current?.kind === 'answered' ? 'Next' : hasAnswer ? `Send · +${q.cents} pts` : 'Skip')
+    : dragDown ? (idx === 0 ? null : 'Previous') : null;
+
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      onWheel={onWheel}
+      style={{
+        position: 'relative', height: '100%', overflow: 'hidden',
+        background: INK, color: '#fff',
+        touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
+        cursor: dragging ? 'grabbing' : 'default',
+      }}>
+      {window_.map(i => (
+        <div key={i} style={slideStyle(i)}>
+          {i < total ? (
+            <FlowSlide
+              q={queue[i]}
+              active={i === idx}
+              result={results[i]}
+              capture={i === idx ? capture : null}
+              typing={i === idx && typing}
+              typed={typed}
+              onTyped={setTyped}
+              onTypeInstead={() => { capture.pause(); setTyping(true); }}
+              onTalkInstead={() => { setTyping(false); capture.resume(); }}
+              onRetry={capture.retry}
+              onNext={goNext}
+            />
+          ) : (
+            <FlowEndCard earned={earned} answered={answeredCount} skipped={skippedCount} onDone={exit} />
+          )}
+        </div>
+      ))}
+
+      {/* Fixed chrome — doesn't move with the drag: progress rail, exit, position, points. */}
+      <div data-nodrag style={{
+        position: 'absolute', left: 0, right: 0, top: 0, zIndex: 5,
+        padding: 'var(--li-top-pad, 58px) 16px 0',
+        pointerEvents: 'none',
+      }}>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+          {queue.map((_, i) => (
+            <div key={i} style={{
+              flex: 1, height: 3, borderRadius: 2,
+              background: i < idx || results[i]?.kind === 'answered'
+                ? PRIMARY
+                : i === idx ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.25)',
+              transition: 'background .2s',
+            }} />
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button onClick={exit} aria-label="Exit flow mode" style={{
+            pointerEvents: 'auto',
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.18)',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+          }}><I.close /></button>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>
+            {atEnd ? 'Done' : `${idx + 1} of ${total}`}
+          </div>
+          <div style={{ minWidth: 40, display: 'flex', justifyContent: 'flex-end' }}>
+            {!atEnd && <PointsStamp points={q.cents} />}
+          </div>
+        </div>
+      </div>
+
+      {/* Points toast — small and out of the way, the next question is already listening. */}
+      {toast && (
+        <div key={toast.key} style={{
+          position: 'absolute', left: '50%', top: 'calc(var(--li-top-pad, 58px) + 66px)', zIndex: 6,
+          transform: 'translateX(-50%)',
+          background: PRIMARY, color: '#fff', borderRadius: 999,
+          padding: '8px 14px', fontSize: 13, fontWeight: 800, letterSpacing: 0.4,
+          pointerEvents: 'none', whiteSpace: 'nowrap',
+          animation: 'flow-toast 1.5s ease forwards',
+        }}>+{toast.cents} pts · Sent</div>
+      )}
+
+      {/* Directional cue while dragging. */}
+      {cue && (
+        <div style={{
+          position: 'absolute', left: '50%', zIndex: 6,
+          [dragUp ? 'bottom' : 'top']: dragUp ? 'calc(28px + env(safe-area-inset-bottom))' : 'calc(var(--li-top-pad, 58px) + 70px)',
+          transform: 'translateX(-50%)',
+          background: cue.startsWith('Send') ? PRIMARY : 'rgba(255,255,255,0.16)',
+          border: '1px solid rgba(255,255,255,0.18)',
+          color: '#fff', borderRadius: 999, padding: '9px 16px',
+          fontSize: 12, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase',
+          opacity: cueStrength, pointerEvents: 'none', whiteSpace: 'nowrap',
+        }}>{cue}</div>
+      )}
+    </div>
+  );
+}
+
+function FlowIntro({ count, onStart, onExit }) {
+  const mins = Math.max(1, Math.round((count * 20) / 60));
+  const steps = [
+    ['A question comes up.', 'The mic is already listening — no button to find.'],
+    ['Say your answer out loud.', 'You see the words as you talk. Tap to pause.'],
+    ['Flick up to send it.', 'The next one slides in. Flick without talking to skip.'],
+  ];
+  return (
+    <div style={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      background: INK, color: '#fff',
+      padding: 'calc(var(--li-top-pad, 58px) + 8px) 22px calc(22px + env(safe-area-inset-bottom))',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Eyebrow tone="glass">New · Flow mode</Eyebrow>
+        <button onClick={onExit} aria-label="Close" style={{
+          width: 40, height: 40, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.18)',
+          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        }}><I.close /></button>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 26 }}>
+        <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, lineHeight: 1.08, textWrap: 'balance' }}>
+          Just talk.<br/>Flick up for<br/>the next one.
+        </div>
+        {count > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {steps.map(([t, s], i) => (
+              <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                  background: PRIMARY, color: '#fff', fontWeight: 800, fontSize: 13,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{i + 1}</div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, lineHeight: 1.3 }}>{t}</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.68)', marginTop: 3, lineHeight: 1.45 }}>{s}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.72)', lineHeight: 1.5 }}>
+            You've answered everything for today. New questions show up every day.
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {count > 0 ? (
+          <React.Fragment>
+            <div style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.6)', letterSpacing: 0.2 }}>
+              {count} {count === 1 ? 'question' : 'questions'} · about {mins} min · anonymous · we'll ask for the mic once
+            </div>
+            <PButton onClick={onStart}>Start listening →</PButton>
+          </React.Fragment>
+        ) : (
+          <PButton onClick={onExit}>Back to feed</PButton>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// A pulsing 5-bar meter — "we're listening" at a glance.
+function FlowMeter({ active }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3, height: 18 }}>
+      {[0, 1, 2, 3, 4].map(i => (
+        <div key={i} style={{
+          width: 3, height: 18, borderRadius: 2, background: PRIMARY,
+          transformOrigin: 'center',
+          transform: active ? undefined : 'scaleY(0.3)',
+          animation: active ? `wave-bar 0.${5 + (i % 3)}s ease-in-out ${i * 90}ms infinite` : 'none',
+          opacity: active ? 1 : 0.5,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function FlowSlide({ q, active, result, capture, typing, typed, onTyped, onTypeInstead, onTalkInstead, onRetry, onNext }) {
+  const hero = q.review?.media?.length
+    ? (q.review.media.find(m => m.type === 'image') || q.review.media[0])
+    : null;
+  const heroSrc = hero && hero.type === 'image' ? hero.src : null;
+  const answered = result?.kind === 'answered';
+  const status = capture ? capture.status : 'idle';
+  const listening = status === 'listening';
+
+  // Keep the newest words in view.
+  const scrollRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [capture?.finalText, capture?.interimText]);
+
+  let statusLine;
+  if (answered) statusLine = null;
+  else if (!capture) statusLine = null;
+  else if (typing) statusLine = <span>Typing · <button onClick={onTalkInstead} style={flowLinkStyle}>talk instead</button></span>;
+  else if (status === 'listening') statusLine = <span>{capture.captions ? 'Listening' : 'Recording'} · {fmtClock(capture.seconds)}</span>;
+  else if (status === 'paused') statusLine = <span>Paused · tap to resume</span>;
+  else if (status === 'denied') statusLine = <span style={{ color: '#FFB4A6' }}>Mic blocked — allow it in Settings, or type below.</span>;
+  else if (status === 'error') statusLine = <span style={{ color: '#FFB4A6' }}>Couldn't reach the mic. <button onClick={onRetry} style={flowLinkStyle}>Try again</button></span>;
+  else statusLine = <span>Starting…</span>;
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, overflow: 'hidden',
+      background: INK, color: '#fff',
+    }}>
+      {heroSrc && (
+        <React.Fragment>
+          <img src={heroSrc} alt="" draggable={false} style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: 'center top',
+            opacity: 0.2, pointerEvents: 'none',
+          }} />
+          {/* Flat scrim (no gradients per the design rules) — kept heavy so the
+              question and the live captions always win over the product shot. */}
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(28,27,25,0.62)' }} />
+        </React.Fragment>
+      )}
+
+      <div style={{
+        position: 'relative', height: '100%', boxSizing: 'border-box',
+        display: 'flex', flexDirection: 'column',
+        padding: 'calc(var(--li-top-pad, 58px) + 70px) 22px calc(20px + env(safe-area-inset-bottom))',
+      }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          <Eyebrow tone="glass">{q.buyerType}</Eyebrow>
+          {q.review && <Eyebrow tone="glass">Product review</Eyebrow>}
+          {q.trial && <Eyebrow tone="glass">Trial · paid by LoopedIn</Eyebrow>}
+        </div>
+        <div style={{
+          fontSize: q.review ? 23 : 26, fontWeight: 800, letterSpacing: -0.6,
+          lineHeight: 1.2, textWrap: 'balance',
+        }}>{q.text}</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.62)', marginTop: 10, lineHeight: 1.5 }}>
+          Paid by <span style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>{q.buyer}</span> · anonymous
+        </div>
+
+        {/* Transcript — the words fill in from the bottom as you talk. */}
+        <div ref={scrollRef} style={{
+          flex: 1, minHeight: 0, marginTop: 18, overflowY: 'auto',
+          display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+        }}>
+          {answered ? (
+            <div>
+              {result.text && (
+                <div style={{ fontSize: 19, lineHeight: 1.4, color: 'rgba(255,255,255,0.92)', letterSpacing: -0.2 }}>
+                  {result.text}
+                </div>
+              )}
+              <div style={{ marginTop: 12 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: PRIMARY, color: '#fff', borderRadius: 999,
+                  padding: '6px 12px', fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase',
+                }}><I.check style={{ width: 14, height: 14 }} /> Sent · +{result.cents} pts</span>
+              </div>
+            </div>
+          ) : typing ? (
+            <textarea
+              data-nodrag
+              value={typed}
+              onChange={e => onTyped(e.target.value.slice(0, 280))}
+              placeholder="Type a short, honest answer."
+              autoFocus
+              style={{
+                width: '100%', minHeight: 120, boxSizing: 'border-box',
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)',
+                borderRadius: 14, padding: 14, color: '#fff', outline: 'none', resize: 'none',
+                fontFamily: 'inherit', fontSize: 17, lineHeight: 1.5,
+              }}
+            />
+          ) : capture && (capture.finalText || capture.interimText) ? (
+            <div style={{ fontSize: 21, lineHeight: 1.4, letterSpacing: -0.3, textWrap: 'pretty' }}>
+              <span style={{ color: '#fff' }}>{capture.finalText}</span>
+              {capture.interimText && (
+                <span style={{ color: 'rgba(255,255,255,0.55)' }}>{capture.finalText ? ' ' : ''}{capture.interimText}</span>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 19, lineHeight: 1.4, color: 'rgba(255,255,255,0.4)', letterSpacing: -0.2 }}>
+              {!capture ? '' : capture.captions ? 'Say your answer — your words show up here.' : 'Say your answer. Live captions aren\'t available on this device, so we\'re recording your voice.'}
+            </div>
+          )}
+        </div>
+
+        {/* Status row + next control. */}
+        <div style={{
+          marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            {!answered && <FlowMeter active={listening && !typing} />}
+            <div style={{
+              fontSize: 12, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.78)', fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{answered ? 'Answered' : statusLine}</div>
+          </div>
+          {active && (
+            <button onClick={onNext} style={{
+              flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.2)',
+              color: '#fff', borderRadius: 999, padding: '10px 14px',
+              fontFamily: 'inherit', fontSize: 12, fontWeight: 800, letterSpacing: 1,
+              textTransform: 'uppercase', cursor: 'pointer', minHeight: 40,
+            }}>
+              {answered ? 'Next' : 'Flick up'}
+              <span style={{ display: 'inline-block', animation: 'flow-bob 1.2s ease-in-out infinite' }}>↑</span>
+            </button>
+          )}
+        </div>
+        {!answered && capture && !typing && (status === 'listening' || status === 'paused' || status === 'denied' || status === 'error') && (
+          <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
+            Flick up when you're done · flick up without talking to skip ·{' '}
+            <button onClick={onTypeInstead} style={flowLinkStyle}>type instead</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const flowLinkStyle = {
+  background: 'transparent', border: 0, padding: 0, margin: 0,
+  color: 'inherit', font: 'inherit', textTransform: 'none', letterSpacing: 'inherit',
+  textDecoration: 'underline', cursor: 'pointer',
+};
+
+function FlowEndCard({ earned, answered, skipped, onDone }) {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, background: INK, color: '#fff',
+      display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
+      padding: 'calc(var(--li-top-pad, 58px) + 70px) 22px calc(22px + env(safe-area-inset-bottom))',
+    }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 18 }}>
+        <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, lineHeight: 1.08 }}>
+          You're all caught up.
+        </div>
+        <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ fontSize: 48, fontWeight: 900, color: PRIMARY, letterSpacing: -1.5, lineHeight: 1 }}>+{earned}</span>
+          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', color: PRIMARY }}>pts</span>
+        </div>
+        <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.72)', lineHeight: 1.5 }}>
+          {answered} {answered === 1 ? 'answer' : 'answers'} sent{skipped ? ` · ${skipped} skipped` : ''}. Paid to your LoopedIn wallet. New questions show up every day.
+        </div>
+      </div>
+      <PButton onClick={onDone}>Back to feed</PButton>
+    </div>
+  );
+}
+
+// Feed entry point for Flow mode.
+function FlowCard({ count, onStart }) {
+  const mins = Math.max(1, Math.round((count * 20) / 60));
+  return (
+    <div style={{
+      background: INK, color: '#fff', borderRadius: 16,
+      padding: '18px 18px 16px', display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <Eyebrow tone="glass">New · Flow mode</Eyebrow>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 600, letterSpacing: 0.2, whiteSpace: 'nowrap' }}>
+          {count} {count === 1 ? 'question' : 'questions'} · about {mins} min
+        </span>
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15 }}>
+        Just talk. Flick up for the next one.
+      </div>
+      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', lineHeight: 1.5 }}>
+        The mic is already listening when a question comes up. Say your answer, flick up, and the next one's there — hands-free.
+      </div>
+      <PButton onClick={onStart} style={{ marginTop: 2 }}>Start flow mode →</PButton>
+    </div>
+  );
+}
+
+
 // ===== source: 25602658 =====
 // Pulse — orchestrator. Owns app state, screen routing, modals, points animation.
 
 // The standalone offline demo (/demo) keeps its own state, so presenting never
 // disturbs — and is never disturbed by — the real member app on the same origin.
 const STORAGE_KEY =
-  typeof window !== 'undefined' && (window as any).__LOOPEDIN_DEMO__
-    ? 'pulse-demo-state-v1'
-    : 'pulse-respondent-state-v1';
+  typeof window !== 'undefined' && (window as any).__LOOPEDIN_FLOW__
+    ? 'pulse-flow-state-v1'
+    : typeof window !== 'undefined' && (window as any).__LOOPEDIN_DEMO__
+      ? 'pulse-demo-state-v1'
+      : 'pulse-respondent-state-v1';
 
 const INITIAL_STATE = {
   screen: 'onboarding',       // onboarding | feed | answer | claim | wallet | profile | streaks
@@ -3778,32 +4554,35 @@ function PulseApp() {
     }
   }
 
-  function onAnswered({ qid, cents, mode, text, addTag, qualifies, tag, reaction }) {
-    // Persist the answer if the member has claimed (has a token). Pre-claim
-    // answers are held client-side and replayed to the server on claim.
-    if (getToken('member')) {
-      memberApi.answer(qid, text ?? null, mode).catch(() => {});
-    }
+  // Book an answer into state: mark it answered, credit the points, log it.
+  // Shared by the classic answer screens and Flow mode.
+  function reduceAnswer(s, { qid, cents, mode, text, addTag, qualifies, tag, reaction }) {
     const usedTag = addTag || tag;
-    const newAnswered = { ...state.answered, [qid]: true };
-    const newQualified = usedTag && qualifies
-      ? { ...state.qualifiedFor, [usedTag]: true }
-      : state.qualifiedFor;
-    const history = [{ qid, cents, mode, reaction: reaction || null, ts: Date.now() }, ...state.history];
-    const firstAnswer = !state.hasAnsweredOnce;
-    const answeredQ = findQuestion(qid);
-
-    setState(s => ({
+    return {
       ...s,
-      answered: newAnswered,
-      qualifiedFor: newQualified,
-      history,
+      answered: { ...s.answered, [qid]: true },
+      qualifiedFor: usedTag && qualifies ? { ...s.qualifiedFor, [usedTag]: true } : s.qualifiedFor,
+      history: [{ qid, cents, mode, text: text ?? null, reaction: reaction || null, ts: Date.now() }, ...s.history],
       hasAnsweredOnce: true,
       lastAnsweredId: qid,
       lastAnsweredFromFeed: true,
       pendingCents: s.pendingCents + cents,
       cents: s.cents + cents,
-    }));
+    };
+  }
+
+  function onAnswered(payload) {
+    const { qid, cents, mode, text } = payload;
+    // Persist the answer if the member has claimed (has a token). Pre-claim
+    // answers are held client-side and replayed to the server on claim.
+    if (getToken('member')) {
+      memberApi.answer(qid, text ?? null, mode).catch(() => {});
+    }
+    const newAnswered = { ...state.answered, [qid]: true };
+    const firstAnswer = !state.hasAnsweredOnce;
+    const answeredQ = findQuestion(qid);
+
+    setState(s => reduceAnswer(s, payload));
 
     setCelebration({ cents });
     setTimeout(() => {
@@ -3820,6 +4599,24 @@ function PulseApp() {
         qid: next ? next.id : null,
       }));
     }, 1300);
+  }
+
+  // Flow mode books answers without the celebration overlay or a screen
+  // change — the next question is already on screen and listening.
+  function onFlowAnswered(payload) {
+    if (getToken('member')) {
+      memberApi.answer(payload.qid, payload.text ?? null, payload.mode).catch(() => {});
+    }
+    setState(s => reduceAnswer(s, payload));
+  }
+  // Leaving Flow mode mirrors the classic flow's first-answer rule: the first
+  // points ever earned lead to the save-your-earnings screen.
+  function onFlowExit({ earned, wasFirst }) {
+    setState(s => ({
+      ...s,
+      screen: earned > 0 && wasFirst && !s.claimed ? 'claim' : 'feed',
+      qid: null,
+    }));
   }
 
   async function onClaim({ email, phone }) {
@@ -3954,6 +4751,9 @@ function PulseApp() {
       );
       break;
     }
+    case 'flow':
+      body = <FlowScreen state={state} onAnswer={onFlowAnswered} onExit={onFlowExit} />;
+      break;
     case 'claim':
       body = <ClaimScreen state={state} navigate={navigate} onClaim={onClaim} onSkip={onSkipClaim} />;
       break;
@@ -3974,7 +4774,7 @@ function PulseApp() {
     <React.Fragment>
       <IOSDevice
         width={402} height={874} activeScreen={state.screen}
-        dark={state.screen === 'answer' && !!findQuestion(state.qid)?.review}
+        dark={state.screen === 'flow' || (state.screen === 'answer' && !!findQuestion(state.qid)?.review)}
       >
         <div style={{
           width: '100%',
@@ -3998,10 +4798,10 @@ function PulseApp() {
             // scroll / no scroll). 'claim' is a tall form that must scroll — it
             // owns no inner scroller, so let this wrapper scroll it. Everything
             // else (feed/wallet/streaks/profile) scrolls here too.
-            overflowY: state.screen === 'answer' || state.screen === 'onboarding' ? 'hidden' : 'auto',
+            overflowY: ['answer', 'onboarding', 'flow'].includes(state.screen) ? 'hidden' : 'auto',
             overflowX: 'hidden',
             WebkitOverflowScrolling: 'touch',
-            display: state.screen === 'answer' || state.screen === 'onboarding' ? 'flex' : 'block',
+            display: ['answer', 'onboarding', 'flow'].includes(state.screen) ? 'flex' : 'block',
             flexDirection: 'column',
           }}>
             {body}
@@ -4096,6 +4896,7 @@ function DemoMenu({ screen, onJump, onReset }) {
     { id: 'wallet',     label: '5. Wallet' },
     { id: 'profile',    label: '6. Profile' },
     { id: 'streaks',    label: '7. Streaks' },
+    ...(FLOW_ENABLED ? [{ id: 'flow', label: '8. Flow mode (just talk)' }] : []),
   ];
   return (
     <div className="demo-menu">
