@@ -4537,6 +4537,69 @@ function PulseApp() {
   // Celebration overlay (points earned)
   const [celebration, setCelebration] = React.useState(null); // {points} | null
 
+  // Pull-to-refresh (phones). The app pins <body> and scrolls each screen in
+  // its own container, which defeats Safari's native pull-to-refresh — so we
+  // do it ourselves: drag down from the top of any screen to reload. That
+  // also pulls the newest build past the service worker's cache. Gesture
+  // surfaces (the onboarding deck, Flow mode) own their drags and are skipped.
+  const screenRef = React.useRef(null);
+  const [pull, setPull] = React.useState(0);          // indicator offset, px
+  const [refreshing, setRefreshing] = React.useState(false);
+  const pullRef = React.useRef({ y0: 0, armed: false, pulling: false, px: 0 });
+  const PULL_THRESH = 72;
+  React.useEffect(() => {
+    const el = screenRef.current;
+    if (!el || ['onboarding', 'flow'].includes(state.screen)) return;
+    // Only arm when every scroller between the finger and the screen is at the top.
+    const atTop = (target) => {
+      let n = target;
+      while (n && n !== el.parentNode) {
+        if (n.scrollTop > 0) return false;
+        n = n.parentNode;
+      }
+      return true;
+    };
+    const onStart = (e) => {
+      if (e.touches.length !== 1) return;
+      pullRef.current = { y0: e.touches[0].clientY, armed: atTop(e.target), pulling: false, px: 0 };
+    };
+    const onMove = (e) => {
+      const p = pullRef.current;
+      if (!p.armed) return;
+      const dy = e.touches[0].clientY - p.y0;
+      if (dy <= 0 || !atTop(e.target)) {
+        if (p.pulling) { p.pulling = false; p.px = 0; setPull(0); }
+        if (dy > 0) p.armed = false;
+        return;
+      }
+      p.pulling = true;
+      if (e.cancelable) e.preventDefault(); // no rubber-band under the indicator
+      p.px = Math.min(110, dy * 0.5);
+      setPull(p.px);
+    };
+    const onEnd = () => {
+      const p = pullRef.current;
+      if (p.pulling && p.px >= PULL_THRESH) {
+        setRefreshing(true);
+        setPull(PULL_THRESH);
+        setTimeout(() => window.location.reload(), 120);
+      } else {
+        setPull(0);
+      }
+      p.armed = false; p.pulling = false; p.px = 0;
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [state.screen, state.qid]);
+
   // Picker sheet (profile field picker)
   const [picker, setPicker] = React.useState(null); // { field, options, title } | null
   const [sheet, setSheet] = React.useState(null);   // 'year' | 'address' | 'notes' | null
@@ -4788,7 +4851,7 @@ function PulseApp() {
               li-screen-in transition (member.css) and start scrolled to top.
               (Deliberately NOT a skeleton state: screens are instant local
               data, so a loader would only add fake delay.) */}
-          <div key={`${state.screen}:${state.qid || ''}`} className="li-screen" style={{
+          <div key={`${state.screen}:${state.qid || ''}`} ref={screenRef} className="li-screen" style={{
             flex: '1 1 auto',
             minHeight: 0,
             // 'answer' and 'onboarding' are fixed to the viewport (own internal
@@ -4803,6 +4866,30 @@ function PulseApp() {
           }}>
             {body}
           </div>
+
+          {/* Pull-to-refresh indicator — rides down with the finger, flips at the threshold. */}
+          {pull > 0 && (
+            <div aria-hidden style={{
+              position: 'absolute', left: '50%', top: 'var(--li-top-pad, 58px)', zIndex: 40,
+              transform: `translate(-50%, ${pull - 44}px)`,
+              transition: refreshing ? 'transform .2s ease' : 'none',
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: SURFACE, border: `1px solid ${BORDER_2}`, borderRadius: 999,
+              padding: '7px 12px 7px 9px', pointerEvents: 'none',
+              opacity: Math.min(1, pull / 40),
+            }}>
+              <span style={{
+                width: 22, height: 22, borderRadius: '50%', background: PRIMARY, color: '#fff',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 800, lineHeight: 1,
+                transform: pull >= PULL_THRESH ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform .2s ease',
+              }}>↓</span>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: INK_2 }}>
+                {refreshing ? 'Refreshing' : pull >= PULL_THRESH ? 'Release to refresh' : 'Pull to refresh'}
+              </span>
+            </div>
+          )}
 
           {showTabBar && (
             <TabBar
