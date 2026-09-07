@@ -146,6 +146,18 @@
   @keyframes fade-in {
     from { opacity: 0; } to { opacity: 1; }
   }
+
+  /* Flow mode: points toast, "flick up" arrow, listening meter (see wave-bar) */
+  @keyframes flow-toast {
+    0%   { opacity: 0; transform: translate(-50%, -8px); }
+    15%  { opacity: 1; transform: translate(-50%, 0); }
+    80%  { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -6px); }
+  }
+  @keyframes flow-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-3px); }
+  }
   /* ---------- Real phone (≤520px): the app IS the page ----------
      The stage caption, legend, and jump-to-screen dev menu are laptop demo
      aids; on an actual device they wrap a fake phone inside the real one.

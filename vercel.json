@@ -19,9 +19,18 @@
     {
       "source": "/insights",
       "destination": "/insights.html"
+    },
+    {
+      "source": "/flow",
+      "destination": "/flow.html"
     }
   ],
   "redirects": [
+    {
+      "source": "/flow.html",
+      "destination": "/flow",
+      "permanent": true
+    },
     {
       "source": "/insights.html",
       "destination": "/insights",
