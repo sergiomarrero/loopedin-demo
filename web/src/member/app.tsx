@@ -1575,7 +1575,11 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
   const [qualConfirmed, setQualConfirmed] = React.useState(!needsQualifier);
   const [qualAnswer, setQualAnswer] = React.useState(null); // 'yes' | 'no'
 
+  // Keyboard avoidance only on a real phone. Inside the framed demo (laptop,
+  // iPad) the on-screen keyboard belongs to the page, not the phone frame —
+  // pushing the footer up by its height would crush the answer box.
   const { kb } = useKeyboardInset();
+  const kbPad = useIsRealPhone() && kb > 60 ? kb : 0;
   const charsLeft = 280 - text.length;
   const canSubmitText = text.trim().length >= 3 && qualConfirmed;
   const canSubmitVoice = recState === 'recorded' && qualConfirmed;
@@ -1789,7 +1793,7 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
           Rises with the keyboard so Submit is never hidden behind it. */}
       <div style={{
         padding: '14px 18px calc(16px + env(safe-area-inset-bottom))',
-        marginBottom: kb > 60 ? kb : 0,
+        marginBottom: kbPad,
         transition: 'margin-bottom .2s ease',
         borderTop: `1px solid ${BORDER}`,
         background: SURFACE,
@@ -1967,6 +1971,7 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
   const [text, setText] = React.useState('');
   const [sound, setSound] = React.useState(false);
   const { kb } = useKeyboardInset();
+  const kbPad = useIsRealPhone() && kb > 60 ? kb : 0; // see AnswerScreen
   const videoRef = React.useRef(null);
   // Kick autoplay explicitly: React sets `muted` as a property after mount,
   // which some browsers don't count for the muted-autoplay allowance.
@@ -2208,7 +2213,7 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
       <div style={{
         flexShrink: 0, padding: '16px 18px calc(16px + env(safe-area-inset-bottom))',
         background: '#111', borderTop: '1px solid rgba(255,255,255,0.08)',
-        marginBottom: kb > 60 ? kb : 0,
+        marginBottom: kbPad,
         transition: 'margin-bottom .2s ease',
       }}>
         <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35, letterSpacing: -0.3, textWrap: 'pretty' }}>
