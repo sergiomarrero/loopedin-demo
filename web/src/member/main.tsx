@@ -15,22 +15,8 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   });
 }
 
-// On each load, drop the respondent back to the onboarding screen (demo behavior
-// carried over from the prototype) — keeps wallet/answers but resets the route.
-(function () {
-  const k = 'pulse-respondent-state-v1';
-  try {
-    const r = localStorage.getItem(k);
-    if (r) {
-      const s = JSON.parse(r);
-      s.screen = 'onboarding';
-      s.qid = null;
-      localStorage.setItem(k, JSON.stringify(s));
-    }
-  } catch (e) {
-    /* ignore */
-  }
-})();
+// The app restores whatever screen was open (app.tsx persists it), so a
+// refresh — including pull-to-refresh — lands you back where you were.
 
 // The app module self-renders into #app on import.
 import('./app').then(() => {

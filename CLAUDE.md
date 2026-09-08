@@ -98,6 +98,14 @@ These are product/legal requirements from the brief, not stylistic preferences:
   long-lived branch after a squash merge, `vercel.json` will conflict on the next PR
   (branch history ≠ squashed `main`). Fix: merge `origin/main` into the branch and keep the
   branch's (superset) `vercel.json`. Best practice: reset/rebranch off fresh `main` per change.
+- **Member app entries:** `/member` (real), `/demo` (hermetic offline demo, own state), `/flow`
+  (same app, opens on the feed). All share `web/src/member/app.tsx`. **Flow mode** (reels-style,
+  hands-free answering: mic auto-listens via Web Speech API, flick up = send + next) lives in
+  app.tsx under `// ===== Flow mode` and is reachable from the feed card on every entry.
+- **Refresh keeps your place:** the app persists `screen`/`qid` and the entries no longer reset
+  to onboarding on load. Phones get a custom pull-to-refresh (body is `position:fixed`, so
+  Safari's native one never fires); it's off on gesture surfaces (onboarding deck, review
+  screen, Flow). After a classic answer the app returns to the **feed** (first answer → claim).
 - The orgs console keeps a demo **Tweaks panel** (theme/density/voice) and a **Buyer/Admin**
   role switch — these are intentional demo aids.
 - Admin routes are intentionally **open** in this demo — gate behind a staff role before real launch.

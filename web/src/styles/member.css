@@ -164,8 +164,12 @@
      Full-bleed instead — IOSDevice drops its simulated bezel at the same
      breakpoint (useIsRealPhone in app.tsx). */
   @media (max-width: 520px) {
+    /* Full-bleed device shell: vh first as the fallback for older iOS, dvh wins where supported. */
+    .li-device-full { height: 100vh; height: 100dvh; }
     .stage {
+      min-height: 100vh;
       min-height: 100dvh;
+      height: 100vh;
       height: 100dvh;
       overflow: hidden;
       padding: 0;
@@ -185,6 +189,7 @@
       background: #FAFAFA;
       overscroll-behavior: none;
       min-height: 0;
+      height: 100vh;
       height: 100dvh;
       overflow: hidden;
       position: fixed;
