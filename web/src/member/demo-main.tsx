@@ -20,21 +20,9 @@
 import '../styles/tokens.css';
 import '../styles/member.css';
 
-// Always open the demo at the start of the story, so every presentation begins
-// the same way regardless of how the last one ended.
-(function () {
-  try {
-    const raw = localStorage.getItem('pulse-demo-state-v1');
-    if (raw) {
-      const s = JSON.parse(raw);
-      s.screen = 'onboarding';
-      s.qid = null;
-      localStorage.setItem('pulse-demo-state-v1', JSON.stringify(s));
-    }
-  } catch {
-    /* ignore */
-  }
-})();
+// The demo restores whatever screen was open (app.tsx persists it), so a
+// refresh — including pull-to-refresh — lands you back where you were. Use
+// the menu's "Reset state" to start the story over.
 
 // Offline support: this worker caches the demo shell under its own cache name.
 //

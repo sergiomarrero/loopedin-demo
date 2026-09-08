@@ -20,17 +20,11 @@
 import '../styles/tokens.css';
 import '../styles/member.css';
 
-// Open on the feed, where the Flow card is — the point of this build is the
-// mode, not the onboarding story. Wallet/answers carry over between visits.
+// First visit opens on the feed, where the Flow card is; after that the app
+// restores whatever screen was open, so a refresh lands you where you were.
 (function () {
   try {
-    const raw = localStorage.getItem('pulse-flow-state-v1');
-    if (raw) {
-      const s = JSON.parse(raw);
-      s.screen = 'feed';
-      s.qid = null;
-      localStorage.setItem('pulse-flow-state-v1', JSON.stringify(s));
-    } else {
+    if (!localStorage.getItem('pulse-flow-state-v1')) {
       localStorage.setItem('pulse-flow-state-v1', JSON.stringify({ screen: 'feed' }));
     }
   } catch {

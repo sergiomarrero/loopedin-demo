@@ -253,6 +253,8 @@ function IOSDevice({
     const onScroll = (e) => {
       const t = e.target;
       if (!t || typeof t.scrollTop !== 'number') return;
+      // A picker list or a textarea scrolling is not the page scrolling.
+      if (t.closest && t.closest('[data-sheet], textarea')) return;
       const y = t.scrollTop;
       const dy = y - lastY;
       if (y < 80 || dy < -8) setChromeHidden(false);
@@ -265,13 +267,13 @@ function IOSDevice({
   return (
     <div style={{
       width: fullBleed ? '100vw' : width,
-      height: fullBleed ? '100dvh' : height,
+      height: fullBleed ? undefined : height,
       borderRadius: fullBleed ? 0 : 48, overflow: 'hidden',
       position: 'relative', background: dark ? '#000' : '#F2F2F7',
       boxShadow: fullBleed ? 'none' : '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
       fontFamily: '-apple-system, system-ui, sans-serif',
       WebkitFontSmoothing: 'antialiased',
-    }}>
+    }} className={fullBleed ? 'li-device-full' : undefined}>
       {/* dynamic island — simulated bezel only */}
       {!fullBleed && (
         <div style={{
@@ -484,9 +486,9 @@ const PULSE_QUESTIONS = [
     qualifier: null,
     review: {
       media: [
-        { type: 'image', src: '/review/app-home.svg', alt: 'BenefitTrack app home screen' },
+        { type: 'image', src: '/review/app-home.svg', alt: 'BenefitTrack app home screen', bg: '#FFFFFF' },
       ],
-      reactions: ["Easy to use", "Confusing", "Missing something"],
+      reactions: ["Easy to use", "Confusing", "Incomplete"],
     },
   },
   {
@@ -839,8 +841,13 @@ function MoneyStamp({ cents, size = 'lg', kind = 'pill' }) {
 }
 
 // ---------- Primary button ----------
+// iOS emulates mouseenter after a tap and never sends mouseleave, so hover
+// styling would stick. Only devices with a real pointer get hover states.
+const CAN_HOVER = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(hover: hover)').matches;
+
 function PButton({ children, onClick, kind = 'primary', size = 'lg', disabled, style = {}, type = 'button' }) {
-  const [hover, setHover] = React.useState(false);
+  const [hover, setHoverRaw] = React.useState(false);
+  const setHover = (v) => CAN_HOVER && setHoverRaw(v);
   // Pressed feedback: quick scale-down while the finger is on the button, plus
   // a haptic tick where the platform supports it (Android; iOS ignores it).
   const [pressed, setPressed] = React.useState(false);
@@ -917,8 +924,11 @@ function PCard({ children, onClick, interactive = false, style = {}, surface = '
   return (
     <div
       onClick={onClick}
-      onMouseEnter={() => interactive && setHover(true)}
-      onMouseLeave={() => interactive && setHover(false)}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } } : undefined}
+      onMouseEnter={() => CAN_HOVER && interactive && setHover(true)}
+      onMouseLeave={() => CAN_HOVER && interactive && setHover(false)}
       style={{
         background: bg,
         border: `1px solid ${interactive && hover ? PRIMARY_BORDER : BORDER}`,
@@ -1498,11 +1508,8 @@ function SegTab({ active, onClick, label, count }) {
 
 function AnswerScreen({ qid, state, back, onSubmit }) {
   const q = findQuestion(qid);
-  if (!q) {
-    return <div style={{ padding: 80 }}>Question not found.</div>;
-  }
 
-  const [mode, setMode] = React.useState(q.mode === 'voice' ? 'choose' : 'text'); // 'choose' | 'text' | 'voice'
+  const [mode, setMode] = React.useState(q?.mode === 'voice' ? 'choose' : 'text'); // 'choose' | 'text' | 'voice'
   const [text, setText] = React.useState('');
   const [recState, setRecState] = React.useState('idle'); // 'idle' | 'recording' | 'recorded'
   const [recTime, setRecTime] = React.useState(0);
@@ -1554,18 +1561,21 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
     setRecState('idle'); setRecTime(0);
   };
   // Stop the mic + free the clip if the screen unmounts mid-recording.
+  const recordedUrlRef = React.useRef(null);
+  recordedUrlRef.current = recordedUrl;
   React.useEffect(() => () => {
     const mr = recorderRef.current;
     if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} }
     (streamRef.current?.getTracks() || []).forEach(t => t.stop());
-    if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+    if (recordedUrlRef.current) URL.revokeObjectURL(recordedUrlRef.current);
   }, []);
 
   // Qualifier prompt — show if it's a Browse question with a qualifier and user hasn't confirmed
-  const needsQualifier = q.qualifier && !(state.qualifiedFor || {})[q.qualifier.tag];
+  const needsQualifier = !!(q && q.qualifier && !(state.qualifiedFor || {})[q.qualifier.tag]);
   const [qualConfirmed, setQualConfirmed] = React.useState(!needsQualifier);
   const [qualAnswer, setQualAnswer] = React.useState(null); // 'yes' | 'no'
 
+  const { kb } = useKeyboardInset();
   const charsLeft = 280 - text.length;
   const canSubmitText = text.trim().length >= 3 && qualConfirmed;
   const canSubmitVoice = recState === 'recorded' && qualConfirmed;
@@ -1607,6 +1617,12 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
     if (d && d.on && dragX > 90) back();
     setDragX(0);
   };
+
+  // After every hook, so a question that appears later (server catalog
+  // hydration) doesn't change the hook count between renders.
+  if (!q) {
+    return <div style={{ padding: 80 }}>Question not found.</div>;
+  }
 
   return (
     <div
@@ -1714,8 +1730,8 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
           {q.mode === 'voice' && (
             <button onClick={() => setMode('voice')} style={{
               background: 'transparent', border: 0, color: PRIMARY_DARK,
-              fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 10,
-              cursor: 'pointer', textAlign: 'left',
+              fontSize: 13, fontWeight: 600, padding: '10px 0', marginBottom: 2, minHeight: 40,
+              cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
             }}>← Use voice instead</button>
           )}
           <div style={{
@@ -1751,8 +1767,8 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
         <div style={{ padding: '0 18px 20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
           <button onClick={() => setMode('text')} style={{
             background: 'transparent', border: 0, color: PRIMARY_DARK,
-            fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 16,
-            cursor: 'pointer', textAlign: 'left',
+            fontSize: 13, fontWeight: 600, padding: '10px 0', marginBottom: 6, minHeight: 40,
+            cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
           }}>← Type instead</button>
 
           <VoiceRecorder
@@ -1769,9 +1785,12 @@ function AnswerScreen({ qid, state, back, onSubmit }) {
 
     </div>
 
-      {/* Submit footer — fixed bottom bar of the flex column, never overlaps */}
+      {/* Submit footer — fixed bottom bar of the flex column, never overlaps.
+          Rises with the keyboard so Submit is never hidden behind it. */}
       <div style={{
         padding: '14px 18px calc(16px + env(safe-area-inset-bottom))',
+        marginBottom: kb > 60 ? kb : 0,
+        transition: 'margin-bottom .2s ease',
         borderTop: `1px solid ${BORDER}`,
         background: SURFACE,
         zIndex: 5,
@@ -1840,7 +1859,7 @@ function VoiceRecorder({ recState, recTime, recordedUrl, error, onStart, onStop,
         {recState === 'recorded'  && (
           <span>
             <span style={{ color: PRIMARY_DARK, fontWeight: 700 }}>Recording saved.</span>{' '}
-            <button onClick={onRestart} style={{ background: 'transparent', border: 0, color: INK_2, textDecoration: 'underline', cursor: 'pointer', fontSize: 13, padding: 0, fontFamily: 'inherit' }}>Re-record</button>
+            <button onClick={onRestart} style={{ background: 'transparent', border: 0, color: INK_2, textDecoration: 'underline', cursor: 'pointer', fontSize: 13, padding: '10px 6px', minHeight: 40, fontFamily: 'inherit' }}>Re-record</button>
           </span>
         )}
       </div>
@@ -1947,6 +1966,7 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
   const [mode, setMode] = React.useState('voice'); // 'voice' | 'text'
   const [text, setText] = React.useState('');
   const [sound, setSound] = React.useState(false);
+  const { kb } = useKeyboardInset();
   const videoRef = React.useRef(null);
   // Kick autoplay explicitly: React sets `muted` as a property after mount,
   // which some browsers don't count for the muted-autoplay allowance.
@@ -1971,13 +1991,28 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
     return () => clearInterval(t);
   }, [recState]);
 
+  // True while the finger is down. getUserMedia is async, so a quick tap can
+  // release before the recorder exists — without this the mic would start
+  // afterwards and keep recording with nothing to stop it.
+  const holdingRef = React.useRef(false);
   const holdStart = async (e) => {
     if (recState === 'recorded') return;
     e.preventDefault();
     setRecHint(null);
+    holdingRef.current = true;
     if (recordedUrl) { URL.revokeObjectURL(recordedUrl); setRecordedUrl(null); }
+    // Never stack recorders: close anything a previous hold left behind.
+    const prev = recorderRef.current;
+    if (prev && prev.state !== 'inactive') { try { prev.onstop = null; prev.stop(); } catch { /* ignore */ } }
+    (streamRef.current?.getTracks() || []).forEach(t => t.stop());
+    streamRef.current = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!holdingRef.current) { // released before the mic came up — a tap
+        stream.getTracks().forEach(t => t.stop());
+        setRecHint('Hold the button while you talk, release when you’re done.');
+        return;
+      }
       streamRef.current = stream;
       const { mr, blobFromChunks } = makeAudioRecorder(stream);
       chunksRef.current = [];
@@ -1993,6 +2028,7 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
     }
   };
   const holdEnd = () => {
+    holdingRef.current = false;
     const mr = recorderRef.current;
     if (!mr || mr.state === 'inactive') return;
     const heldMs = Date.now() - holdT0.current;
@@ -2013,16 +2049,20 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
     if (recordedUrl) { URL.revokeObjectURL(recordedUrl); setRecordedUrl(null); }
     setRecState('idle'); setRecTime(0); setRecHint(null);
   };
+  const recordedUrlRef = React.useRef(null);
+  recordedUrlRef.current = recordedUrl;
   React.useEffect(() => () => { // teardown on unmount
     const mr = recorderRef.current;
     if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} }
     (streamRef.current?.getTracks() || []).forEach(t => t.stop());
-    if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+    if (recordedUrlRef.current) URL.revokeObjectURL(recordedUrlRef.current);
   }, []);
 
   // --- swipe up = skip to next question (only while viewing, not recording) ---
   const swipe = React.useRef(null);
   const onTouchStart = (e) => {
+    // Scrolling the textarea or scrubbing the audio player is not a swipe.
+    if (e.target && e.target.closest && e.target.closest('textarea, audio, input, button')) { swipe.current = null; return; }
     const t = e.touches[0];
     swipe.current = { x0: t.clientX, y0: t.clientY };
   };
@@ -2040,6 +2080,9 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
 
   // Tap left third = previous segment, elsewhere = next (IG stories).
   const onMediaTap = (e) => {
+    // Autoplay can be blocked (Low Power Mode) — the first tap plays instead of flipping.
+    const v = videoRef.current;
+    if (v && v.paused) { v.play().catch(() => {}); return; }
     if (media.length < 2) return;
     const r = e.currentTarget.getBoundingClientRect();
     const frac = (e.clientX - r.left) / r.width;
@@ -2121,13 +2164,16 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
       </div>
 
       {/* Media */}
-      <div onClick={onMediaTap} style={{ flex: 1, position: 'relative', minHeight: 0, background: '#111' }}>
+      {/* Media is 9:16 — shown whole (contain) on a matching cream ground, so a
+          phone's slightly squarer media area never crops the product shot's
+          title or the label copy at the edges. */}
+      <div onClick={onMediaTap} style={{ flex: 1, position: 'relative', minHeight: 0, background: m.bg || '#F4EDE3' }}>
         {m.type === 'video' ? (
           <video
             key={m.src}
             ref={videoRef}
             autoPlay muted={!sound} loop playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
           >
             {/* mp4 (H.264) for Safari/iOS; WebM fallback for codec-free Chromium builds. */}
             <source src={m.src} type="video/mp4" />
@@ -2135,7 +2181,7 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
           </video>
         ) : (
           <img key={m.src} src={m.src} alt={m.alt || ''} draggable={false}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
         )}
         {m.type === 'video' && (
           <button
@@ -2157,10 +2203,13 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
         )}
       </div>
 
-      {/* Bottom panel: question → react → say why */}
+      {/* Bottom panel: question → react → say why. Rises with the keyboard
+          while typing so the composer and Submit stay visible. */}
       <div style={{
         flexShrink: 0, padding: '16px 18px calc(16px + env(safe-area-inset-bottom))',
         background: '#111', borderTop: '1px solid rgba(255,255,255,0.08)',
+        marginBottom: kb > 60 ? kb : 0,
+        transition: 'margin-bottom .2s ease',
       }}>
         <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35, letterSpacing: -0.3, textWrap: 'pretty' }}>
           {q.text}
@@ -2206,7 +2255,7 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
                     <button onClick={() => setMode('text')} style={{
                       background: 'transparent', border: 0, color: 'rgba(255,255,255,0.6)',
                       fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline',
-                      fontFamily: 'inherit', padding: 4,
+                      fontFamily: 'inherit', padding: '10px 12px', minHeight: 40,
                     }}>Type instead</button>
                   </React.Fragment>
                 ) : (
@@ -2242,7 +2291,7 @@ function ReviewScreen({ qid, state, back, onSubmit, onSkipNext }) {
                   <button onClick={() => setMode('voice')} style={{
                     background: 'transparent', border: 0, color: 'rgba(255,255,255,0.6)',
                     fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline',
-                    fontFamily: 'inherit', padding: 4, flexShrink: 0,
+                    fontFamily: 'inherit', padding: '10px 12px', minHeight: 40, flexShrink: 0,
                   }}>Use voice</button>
                   <PButton onClick={submit} disabled={!canSubmit} style={{ flex: 1 }}>
                     Submit & Earn {q.cents} pts
@@ -2350,7 +2399,7 @@ function ClaimScreen({ state, onClaim, onSkip }) {
               </svg>
             </div>
             <div>
-              <strong>Your {state.cents} points will be lost if you leave without saving.</strong> Tap Skip again to leave anyway.
+              <strong>Your {state.cents} points live only on this phone until you save them.</strong> Tap Skip again to continue anyway.
             </div>
           </div>
         )}
@@ -2539,7 +2588,7 @@ function WalletScreen({ state, navigate }) {
                   {!unlocked && <span style={{ color: INK_5 }}><I.lock /></span>}
                 </div>
                 <div style={{ fontSize: 12, color: INK_4, marginTop: 2 }}>
-                  Cash out for {dollarsFmt(t.cents)} · <span style={{ fontStyle: 'italic' }}>coming soon</span>
+                  {dollarsFmt(t.cents)} cash-out · <span style={{ fontStyle: 'italic' }}>coming soon</span>
                 </div>
               </div>
               {unlocked
@@ -3022,7 +3071,7 @@ function SheetOverlay({ onClose, children }) {
       animation: 'fade-in .2s ease',
       paddingBottom: kbOpen ? 0 : kb,
       transition: 'padding-bottom .2s ease',
-    }} onClick={onClose}>
+    }} onClick={onClose} data-sheet>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: '#fff',
         borderRadius: kbOpen ? '0 0 20px 20px' : '20px 20px 0 0',
@@ -3449,8 +3498,13 @@ function PointsStamp({ points }) {
   );
 }
 
-function OnboardingScreen({ navigate, onPickFirst }) {
-  const featured = PULSE_QUESTIONS.filter(q => q.feed === 'foryou').slice(0, 3);
+function OnboardingScreen({ navigate, onPickFirst, state }) {
+  // Unanswered For You questions only (fall back to the full set so a member
+  // who has answered everything still sees the story, not an empty deck).
+  const featured = React.useMemo(() => {
+    const open = PULSE_QUESTIONS.filter(q => q.feed === 'foryou' && !state.answered[q.id]);
+    return (open.length ? open : PULSE_QUESTIONS.filter(q => q.feed === 'foryou')).slice(0, 3);
+  }, []);
   const [topIdx, setTopIdx] = React.useState(0);
   const [dragX, setDragX] = React.useState(0);
   const [dragging, setDragging] = React.useState(false);
@@ -3461,7 +3515,7 @@ function OnboardingScreen({ navigate, onPickFirst }) {
   // Commit a swipe: 'left' flies the card off and reveals the next question
   // (skip / browse the deck); 'right' opens the answer flow for this card.
   function commit(dir) {
-    if (busyRef.current) return;
+    if (busyRef.current || !featured.length) return;
     busyRef.current = true;
     setDragging(false);
     setDragX(dir === 'left' ? -640 : 640); // fly out (transition is on now)
@@ -3492,6 +3546,7 @@ function OnboardingScreen({ navigate, onPickFirst }) {
     const up = (ev) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       const dx = startRef.current ? ev.clientX - startRef.current.x : 0;
       startRef.current = null;
       setDragging(false);
@@ -3505,6 +3560,7 @@ function OnboardingScreen({ navigate, onPickFirst }) {
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
   const handlers = { onPointerDown: onDown };
 
@@ -3554,7 +3610,7 @@ function OnboardingScreen({ navigate, onPickFirst }) {
         position: 'relative',
         margin: '16px 0 6px',
         flex: 1,
-        minHeight: 300,
+        minHeight: 210, // short phones (SE) still fit the buttons below
       }}>
         <StackCard q={next2} depth={2} />
         <StackCard q={next}  depth={1} />
@@ -3646,6 +3702,7 @@ function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
         boxShadow: isTop ? '0 12px 36px rgba(28,27,25,0.06)' : 'none',
         overflow: 'hidden',
       }}>
+        {!isTop ? null : (<React.Fragment>
         {/* Directional swipe cues — appear as the card is dragged. */}
         {isTop && dragX > 8 && (
           <span style={{
@@ -3678,7 +3735,9 @@ function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
         {q.review?.media?.length > 0 && (
           <div style={{
             margin: '0 0 14px', borderRadius: 12, overflow: 'hidden',
-            height: 130, background: SURFACE_TINT, flexShrink: 0,
+            // Up to 130px, but gives way first on short phones (SE) so the
+            // question text is never pushed off the card.
+            flex: '0 1 130px', minHeight: 48, background: SURFACE_TINT,
           }}>
             <img
               src={(q.review.media.find(m => m.type === 'image') || q.review.media[0]).src}
@@ -3691,7 +3750,7 @@ function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
         <div style={{
           fontSize: q.review ? 19 : 22, fontWeight: 700, color: INK,
           letterSpacing: -0.4, lineHeight: 1.3, textWrap: 'balance',
-          flex: 1,
+          flex: '1 0 auto',
         }}>{q.text}</div>
         <div style={{
           marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -3704,6 +3763,7 @@ function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
             {q.mode === 'voice' ? 'Text + Voice' : 'Text'}
           </Eyebrow>
         </div>
+        </React.Fragment>)}
       </div>
     </div>
   );
@@ -3718,10 +3778,9 @@ function StackCard({ q, depth, dragX = 0, dragging = false, handlers }) {
 // a flick up sends what you said and pulls in the next one. No submit button,
 // no mode chooser — talk, flick, repeat. Tap to pause, flick down to go back.
 //
-// Ships behind __LOOPEDIN_FLOW__ (the /flow demo entry) so the live member app
-// and the offline demo are untouched until the mode is approved.
 
-const FLOW_ENABLED = typeof window !== 'undefined' && !!(window as any).__LOOPEDIN_FLOW__;
+// Flow mode is on in every build; /flow is just an entry that opens on the feed.
+const FLOW_ENABLED = true;
 
 // Live captions come from the Web Speech API where the browser has it (Safari on
 // iPhone/iPad, Chrome). Elsewhere we fall back to a plain MediaRecorder capture
@@ -3782,15 +3841,18 @@ function useFlowCapture() {
     streamRef.current = null;
   }
 
+  const genRef = React.useRef(0); // bumps on every start()/stop(); stale mic promises bail out
   async function startRecorder() {
+    const gen = genRef.current;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!activeRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+      if (!activeRef.current || gen !== genRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = stream;
       const { mr } = makeAudioRecorder(stream);
       mrRef.current = mr;
       mr.start();
-      setStatus('listening');
+      if (pausedRef.current) { try { mr.pause(); } catch { /* ignore */ } setStatus('paused'); }
+      else setStatus('listening');
     } catch (err) {
       setStatus(err && err.name === 'NotAllowedError' ? 'denied' : 'error');
     }
@@ -3856,6 +3918,7 @@ function useFlowCapture() {
   }
 
   function start() {
+    genRef.current += 1;
     activeRef.current = true;
     pausedRef.current = false;
     baseRef.current = '';
@@ -3870,6 +3933,7 @@ function useFlowCapture() {
   // Stop and hand back everything captured for this question.
   function stop() {
     const out = { text: heardSoFar(), seconds: secRef.current };
+    genRef.current += 1;
     activeRef.current = false;
     pausedRef.current = false;
     teardownRecognizer();
@@ -3878,8 +3942,9 @@ function useFlowCapture() {
     return out;
   }
   function pause() {
-    if (!activeRef.current || status !== 'listening') return;
-    pausedRef.current = true;
+    if (!activeRef.current) return;
+    pausedRef.current = true; // honoured even if the mic is still coming up
+    if (status !== 'listening') return;
     if (mrRef.current) {
       try { mrRef.current.pause(); } catch { /* ignore */ }
     } else {
@@ -3895,8 +3960,10 @@ function useFlowCapture() {
     if (mrRef.current) {
       try { mrRef.current.resume(); } catch { /* ignore */ }
       setStatus('listening');
-    } else {
+    } else if (captionsRef.current && getSpeechRecognition()) {
       startRecognizer();
+    } else {
+      startRecorder();
     }
   }
   function retry() {
@@ -4417,7 +4484,7 @@ function FlowSlide({ q, active, result, capture, typing, typed, onTyped, onTypeI
 }
 
 const flowLinkStyle = {
-  background: 'transparent', border: 0, padding: 0, margin: 0,
+  background: 'transparent', border: 0, padding: '8px 2px', margin: '-8px -2px',
   color: 'inherit', font: 'inherit', textTransform: 'none', letterSpacing: 'inherit',
   textDecoration: 'underline', cursor: 'pointer',
 };
@@ -4549,7 +4616,8 @@ function PulseApp() {
   const PULL_THRESH = 72;
   React.useEffect(() => {
     const el = screenRef.current;
-    if (!el || ['onboarding', 'flow'].includes(state.screen)) return;
+    const isReview = state.screen === 'answer' && !!findQuestion(state.qid)?.review;
+    if (!el || ['onboarding', 'flow'].includes(state.screen) || isReview) return;
     // Only arm when every scroller between the finger and the screen is at the top.
     const atTop = (target) => {
       let n = target;
@@ -4561,15 +4629,25 @@ function PulseApp() {
     };
     const onStart = (e) => {
       if (e.touches.length !== 1) return;
-      pullRef.current = { y0: e.touches[0].clientY, armed: atTop(e.target), pulling: false, px: 0 };
+      const t = e.target;
+      const onControl = !!(t && t.closest && t.closest('textarea, input, audio, video, select'));
+      pullRef.current = { y0: e.touches[0].clientY, x0: e.touches[0].clientX, armed: !onControl && atTop(t), pulling: false, px: 0 };
     };
     const onMove = (e) => {
       const p = pullRef.current;
       if (!p.armed) return;
       const dy = e.touches[0].clientY - p.y0;
-      if (dy <= 0 || !atTop(e.target)) {
+      const dx = Math.abs(e.touches[0].clientX - p.x0);
+      // Classify once: a sideways or upward move is a scroll/swipe, never a
+      // pull — and after that this touch never re-arms (the browser has
+      // already committed to scrolling).
+      if (!p.pulling) {
+        if (dy < 0 || dx > 10 || (dx > dy && dx > 4)) { p.armed = false; return; }
+        if (dy < 12) return; // slop: don't claim the gesture yet
+      }
+      if (!atTop(e.target)) {
         if (p.pulling) { p.pulling = false; p.px = 0; setPull(0); }
-        if (dy > 0) p.armed = false;
+        p.armed = false;
         return;
       }
       p.pulling = true;
@@ -4617,9 +4695,13 @@ function PulseApp() {
   // Book an answer into state: mark it answered, credit the points, log it.
   // Shared by the classic answer screens and Flow mode.
   function reduceAnswer(s, { qid, cents, mode, text, addTag, qualifies, tag, reaction }) {
+    if (s.answered[qid]) return s; // already booked — a double tap must not pay twice
     const usedTag = addTag || tag;
+    const today = new Date().toISOString().slice(0, 10);
     return {
       ...s,
+      todayDate: today,
+      todayCents: (s.todayDate === today ? (s.todayCents || 0) : 0) + cents,
       answered: { ...s.answered, [qid]: true },
       qualifiedFor: usedTag && qualifies ? { ...s.qualifiedFor, [usedTag]: true } : s.qualifiedFor,
       history: [{ qid, cents, mode, text: text ?? null, reaction: reaction || null, ts: Date.now() }, ...s.history],
@@ -4631,41 +4713,47 @@ function PulseApp() {
     };
   }
 
+  // A reaction chip (product reviews) travels with the text so the server
+  // sees it too: "I'd buy it — the label looks premium".
+  function serverText(payload) {
+    const parts = [payload.reaction, payload.text].filter(Boolean);
+    return parts.length ? parts.join(' — ') : null;
+  }
+
+  const celebrationTimer = React.useRef(null);
   function onAnswered(payload) {
-    const { qid, cents, mode, text } = payload;
+    const { qid, cents, mode } = payload;
+    if (state.answered[qid] || celebrationTimer.current) return; // double tap
     // Persist the answer if the member has claimed (has a token). Pre-claim
     // answers are held client-side and replayed to the server on claim.
     if (getToken('member')) {
-      memberApi.answer(qid, text ?? null, mode).catch(() => {});
+      memberApi.answer(qid, serverText(payload), mode).catch(() => {});
     }
-    const newAnswered = { ...state.answered, [qid]: true };
     const firstAnswer = !state.hasAnsweredOnce;
-    const answeredQ = findQuestion(qid);
 
     setState(s => reduceAnswer(s, payload));
 
     setCelebration({ cents });
-    setTimeout(() => {
+    celebrationTimer.current = setTimeout(() => {
+      celebrationTimer.current = null;
       setCelebration(null);
-      // First answer → claim screen. Otherwise, keep the vertical flow going:
-      // slide straight into the next unanswered For You question (TikTok-style);
-      // when the deck runs dry, land on the feed's "all caught up" state.
-      const next = !firstAnswer && answeredQ?.feed === 'foryou'
-        ? PULSE_QUESTIONS.find(x => x.feed === 'foryou' && !newAnswered[x.id])
-        : null;
-      setState(s => ({
-        ...s,
-        screen: firstAnswer ? 'claim' : (next ? 'answer' : 'feed'),
-        qid: next ? next.id : null,
-      }));
+      // First answer → save-your-earnings. Otherwise back to the feed, where
+      // the next question is waiting at the top. (Auto-jumping straight into
+      // the next question's media read as a glitch — Flow mode is the place
+      // for the continuous feed.) Only move if the member is still on this
+      // question — a Back tap during the celebration wins.
+      setState(s => (s.screen === 'answer' && s.qid === qid)
+        ? { ...s, screen: firstAnswer ? 'claim' : 'feed', qid: null }
+        : s);
     }, 1300);
   }
+  React.useEffect(() => () => { if (celebrationTimer.current) clearTimeout(celebrationTimer.current); }, []);
 
   // Flow mode books answers without the celebration overlay or a screen
   // change — the next question is already on screen and listening.
   function onFlowAnswered(payload) {
     if (getToken('member')) {
-      memberApi.answer(payload.qid, payload.text ?? null, payload.mode).catch(() => {});
+      memberApi.answer(payload.qid, serverText(payload), payload.mode).catch(() => {});
     }
     setState(s => reduceAnswer(s, payload));
   }
@@ -4689,7 +4777,7 @@ function PulseApp() {
       // Replay locally-recorded answers (server dedupes / ignores conflicts).
       const earned = [...(state.history || [])].reverse();
       for (const h of earned) {
-        await memberApi.answer(h.qid, h.text ?? null, h.mode).catch(() => {});
+        await memberApi.answer(h.qid, serverText(h), h.mode).catch(() => {});
       }
       if (state.profile) {
         await memberApi.saveProfile(state.profile, state.qualifiedFor, state.streak).catch(() => {});
@@ -4758,7 +4846,8 @@ function PulseApp() {
         }
         if (added) setState(s => ({ ...s })); // bump to re-render the feed
       } catch (e) {
-        setToken('member', null); // stale/expired token
+        // Only a rejected token logs the member out; a flaky network must not.
+        if (e && (e.status === 401 || e.status === 403)) setToken('member', null);
       }
     })();
   }, []);
@@ -4773,6 +4862,7 @@ function PulseApp() {
     case 'onboarding':
       body = <OnboardingScreen
         navigate={navigate}
+        state={state}
         onPickFirst={(qid) => setState(s => ({ ...s, screen: 'answer', qid }))}
       />;
       break;
