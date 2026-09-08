@@ -203,8 +203,8 @@
      desktop demo frame (fake 58px status bar) and a real phone (safe-area is
      padded by the device shell, so the header only needs breathing room). */
   :root {
-    --li-top-pad: 58px;
-    --li-tabs-top: 112px; /* sticky brand header height: 58 + 38 + 16 */
+    --li-top-pad: 66px; /* fake status bar is 62px tall */
+    --li-tabs-top: 120px; /* sticky brand header height: 66 + 38 + 16 */
   }
   @media (max-width: 520px) {
     :root {
