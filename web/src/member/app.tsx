@@ -234,6 +234,19 @@ function IOSDevice({
   title, keyboard = false, activeScreen,
 }) {
   const fullBleed = useIsRealPhone();
+  // Framed presentation (laptop, iPad): shrink the phone to fit the viewport
+  // height so the whole screen — submit bar included — is visible without
+  // scrolling the page. `zoom` keeps layout math simple (no transform gaps).
+  // Uses window.innerHeight, which iPadOS does NOT change for the on-screen
+  // keyboard, so typing never rescales the frame.
+  const [fit, setFit] = React.useState(1);
+  React.useEffect(() => {
+    if (fullBleed) return;
+    const calc = () => setFit(Math.max(0.55, Math.min(1, (window.innerHeight - 120) / height)));
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, [fullBleed, height]);
   // Scroll-direction tracking for auto-hiding chrome (tab bar). Native
   // listener on the scroll container — passive, so it never blocks scrolling.
   const [chromeHidden, setChromeHidden] = React.useState(false);
@@ -268,6 +281,7 @@ function IOSDevice({
     <div style={{
       width: fullBleed ? '100vw' : width,
       height: fullBleed ? undefined : height,
+      zoom: fullBleed ? undefined : fit,
       borderRadius: fullBleed ? 0 : 48, overflow: 'hidden',
       position: 'relative', background: dark ? '#000' : '#F2F2F7',
       boxShadow: fullBleed ? 'none' : '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
